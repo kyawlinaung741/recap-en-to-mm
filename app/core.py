@@ -999,7 +999,8 @@ def apply_subtitle_burn_in(
     project_root = Path(__file__).resolve().parents[1]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
-    from subtitle_service import burn_subtitles
+    from subtitle_service import ass_colour, burn_subtitles
+    primary = ass_colour(str(overlays.get("subtitle_color", "#FFFFFF")), float(overlays.get("subtitle_opacity", 1.0)))
     args = _encoder_args(encoder)
     try:
         return burn_subtitles(
@@ -1008,6 +1009,7 @@ def apply_subtitle_burn_in(
             font_size=int(overlays.get("subtitle_font_size", 30)),
             margin=int(overlays.get("subtitle_margin", 42)),
             font_name=str(overlays.get("subtitle_font_name", "Myanmar Text")),
+            primary_colour=primary,
             encoder_args=args,
         )
     except Exception:
@@ -1019,6 +1021,7 @@ def apply_subtitle_burn_in(
                 font_size=int(overlays.get("subtitle_font_size", 30)),
                 margin=int(overlays.get("subtitle_margin", 42)),
                 font_name=str(overlays.get("subtitle_font_name", "Myanmar Text")),
+                primary_colour=primary,
                 encoder_args=_encoder_args("libx264"),
             )
         raise

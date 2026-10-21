@@ -68,6 +68,19 @@ def _filter_path(path: Path) -> str:
     return str(path.resolve()).replace("\\", "/").replace(":", "\\:").replace("'", "\\'")
 
 
+def ass_colour(hex_colour: str = "#FFFFFF", opacity: float = 1.0) -> str:
+    """Convert Tk/HTML #RRGGBB plus opacity to ASS BGR+A (&HAABBGGRR)."""
+    text = str(hex_colour or "#FFFFFF").strip().lstrip("#")
+    if len(text) != 6 or any(ch not in "0123456789abcdefABCDEF" for ch in text):
+        text = "FFFFFF"
+    try:
+        alpha = max(0, min(255, round((1.0 - float(opacity)) * 255)))
+    except (TypeError, ValueError):
+        alpha = 0
+    r, g, b = text[0:2], text[2:4], text[4:6]
+    return f"&H{alpha:02X}{b}{g}{r}"
+
+
 def burn_subtitles(
     ffmpeg: str,
     input_video: Path,
@@ -98,6 +111,34 @@ def burn_subtitles(
     if result.returncode != 0 or not output_video.is_file() or output_video.stat().st_size < 5000:
         raise RuntimeError("Subtitle burn-in failed: " + (result.stderr or "")[-3000:])
     return output_video
+
+
+def mux_soft_subtitles(
+    ffmpeg: str,
+    video: Path,
+    audio: Path | None,
+    subtitle_file: Path,
+    output: Path,
+    *,
+    language: str = "mya",
+    title: str = "Myanmar",
+) -> Path:
+    """Mux an SRT as an MP4 mov_text track without burning it into the picture."""
+    cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-i", str(video)]
+    if audio is not None and audio.is_file():
+        cmd += ["-i", str(audio)]
+    cmd += ["-i", str(subtitle_file), "-map", "0:v:0"]
+    subtitle_index = 2 if audio is not None and audio.is_file() else 1
+    if audio is not None and audio.is_file():
+        cmd += ["-map", "1:a:0"]
+    cmd += ["-map", f"{subtitle_index}:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-c:s", "mov_text", "-metadata:s:s:0", f"language={language}",
+            "-metadata:s:s:0", f"title={title}", "-disposition:s:0", "default",
+            "-movflags", "+faststart", str(output)]
+    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if result.returncode != 0 or not output.is_file() or output.stat().st_size < 5000:
+        raise RuntimeError("Soft subtitle mux failed: " + (result.stderr or "")[-3000:])
+    return output
 
 
 def load_plan(path: Path) -> dict[str, Any]:

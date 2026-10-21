@@ -10,7 +10,7 @@ APP = ROOT / "app"
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))
 
-from subtitle_service import POSITIONS, subtitle_segments, write_srt  # noqa: E402
+from subtitle_service import POSITIONS, ass_colour, subtitle_segments, write_srt  # noqa: E402
 
 
 class SubtitleServiceTests(unittest.TestCase):
@@ -39,6 +39,10 @@ class SubtitleServiceTests(unittest.TestCase):
         self.assertEqual(POSITIONS["Top Center"], 8)
         self.assertEqual(POSITIONS["Center"], 5)
         self.assertEqual(POSITIONS["Bottom Center"], 2)
+
+    def test_color_and_opacity_map_to_ass_style(self):
+        self.assertEqual(ass_colour("#FF0000", 1.0), "&H000000FF")
+        self.assertEqual(ass_colour("#00FF00", 0.5), "&H8000FF00")
 
 
 if __name__ == "__main__":

@@ -344,3 +344,16 @@ Recap render ပြီးတဲ့အခါ `smart_sync_plan_edge_tts.json` ထ�
 - **Margin** — Video အနားကွာဟမှုကို ပြင်နိုင်ပါတယ်။
 
 SRT ဖိုင်ကို သီးခြားသုံးလိုပါက `jobs\\<video>_<code>\\edge_tts_smart_sync\\subtitles_myanmar.srt` မှာ ရှိပါတယ်။ Burn-in ဖွင့်ထားရင် Output MP4 အသစ်ထဲမှာ Subtitle ပါပြီးသားဖြစ်ပါတယ်။
+
+
+## Subtitle preview and Subtitle tab
+
+Recap tab ရဲ့ **Myanmar Subtitles (voice-synced)** section မှာ လက်ရှိ TTS timing နဲ့ကိုက်တဲ့ subtitle စာကြောင်းကို video preview ပေါ်မှာ ကြည့်နိုင်ပါတယ်။ `Location`, `Color`, `Size`, `Opacity`, `Margin` ကို ပြင်နိုင်ပြီး Size / Opacity / Margin တွေမှာ ဘေးဆွဲ slider နဲ့ တန်ဖိုးပြထားပါတယ်။ Color ကို **Choose** နှိပ်ပြီး ရွေးနိုင်ပါတယ်။
+
+သီးခြား **Subtitle** tab မှာ ရှိပြီးသား video နဲ့ voice-synced `.srt` ကို ရွေးပြီး preview လုပ်နိုင်ပါတယ်။ ဒီ tab မှာလည်း Location၊ Color၊ Size၊ Opacity၊ Margin ကို ပြင်နိုင်ပါတယ်။ Export mode များမှာ `SRT only`, `Soft subtitle MP4`, `Burn-in MP4`, `Both` ပါဝင်ပြီး အောက်ပါ checkbutton များကိုလည်း သီးခြားဖွင့်/ပိတ်နိုင်ပါတယ်:
+
+- Generate SRT file
+- Add soft subtitle track
+- Burn subtitles into video
+
+Soft subtitle export က MP4 ထဲမှာ `mov_text` subtitle track အဖြစ် ထည့်ပေးပြီး Burn-in export က စာတန်းကို video frame ထဲ တစ်ခါတည်းထည့်ပေးပါတယ်။ Timing အတွက် ရှိပြီးသား SRT ထဲက အချိန်ကို မပြောင်းဘဲ အသုံးပြုပါတယ်။

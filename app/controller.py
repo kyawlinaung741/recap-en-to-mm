@@ -14,7 +14,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import colorchooser, filedialog, messagebox, ttk
 
 from core import FRAME_FILLS, OUTPUT_RATIOS, normalize_segments, output_canvas, probe_video_size
 from preview_tools import probe_duration as preview_probe_duration, extract_preview_frame, scale_logo_preview
@@ -190,6 +190,8 @@ class App(tk.Tk):
             self.subtitle_position.set("Bottom Center")
         self.subtitle_font_size = tk.IntVar(value=int(self.cfg.get("subtitle_font_size", 30)))
         self.subtitle_margin = tk.IntVar(value=int(self.cfg.get("subtitle_margin", 42)))
+        self.subtitle_color = tk.StringVar(value=str(self.cfg.get("subtitle_color", "#FFFFFF")))
+        self.subtitle_opacity = tk.DoubleVar(value=float(self.cfg.get("subtitle_opacity", 1.0)))
         self.preview_time = tk.DoubleVar(value=float(self.cfg.get("preview_seek_seconds", 1.0)))
         self.preview_duration = 0.0
         self.blur_boxes: list[dict[str, float]] = []
@@ -261,8 +263,14 @@ class App(tk.Tk):
         self.splitter_tab = SplitterTab(self.tools_tabs, cfg=self.cfg, save=lambda: save_config(self.cfg),
                                         tool=lambda name: _tool_path(self.cfg, name), logs_dir=LOGS_DIR)
         self.tools_tabs.add(self.splitter_tab, text="Splitter")
+        from subtitle_tab import SubtitleTab
+        self.subtitle_tab = SubtitleTab(self.tools_tabs, cfg=self.cfg, tool=lambda name: _tool_path(self.cfg, name),
+                                        colors={"bg": BG, "panel": PANEL, "fg": FG, "muted": MUTED})
+        self.tools_tabs.add(self.subtitle_tab, text="Subtitle")
         if self.cfg.get("last_tool_tab") == "splitter":
             self.tools_tabs.select(self.splitter_tab)
+        elif self.cfg.get("last_tool_tab") == "subtitle":
+            self.tools_tabs.select(self.subtitle_tab)
         outer = ttk.Frame(recap_tab, padding=(12, 8, 12, 8))
         outer.pack(fill="both", expand=True)
         outer.columnconfigure(0, weight=1)
@@ -524,8 +532,23 @@ class App(tk.Tk):
         subtitle_margin.columnconfigure(1, weight=1)
         ttk.Label(subtitle_margin, text="Margin", width=9).grid(row=0, column=0, sticky="w")
         ttk.Spinbox(subtitle_margin, from_=0, to=500, textvariable=self.subtitle_margin, width=7).grid(row=0, column=1, sticky="w")
+        self.subtitle_size_slider = slider_row(28, "Size", 10, 96, self.subtitle_font_size,
+                                               lambda v: self._subtitle_int_changed(v, self.subtitle_font_size, "subtitle_size_label"),
+                                               "subtitle_size_label", str(int(self.subtitle_font_size.get())), pady=(2, 2))
+        self.subtitle_opacity_slider = slider_row(29, "Opacity", 0.10, 1.00, self.subtitle_opacity,
+                                                  lambda v: self._subtitle_opacity_changed(v),
+                                                  "subtitle_opacity_label", f"{self.subtitle_opacity.get()*100:.0f}%", pady=(2, 2))
+        self.subtitle_margin_slider = slider_row(30, "Margin", 0, 500, self.subtitle_margin,
+                                                 lambda v: self._subtitle_int_changed(v, self.subtitle_margin, "subtitle_margin_label"),
+                                                 "subtitle_margin_label", str(int(self.subtitle_margin.get())), pady=(2, 2))
+        color_row = ttk.Frame(tools)
+        color_row.grid(row=31, column=0, sticky="ew", pady=(2, 3))
+        ttk.Label(color_row, text="Color", width=9).pack(side="left")
+        self.subtitle_color_swatch = tk.Label(color_row, text="   ", bg=self.subtitle_color.get(), relief="sunken")
+        self.subtitle_color_swatch.pack(side="left", padx=(4, 6))
+        ttk.Button(color_row, text="Choose", style="Compact.TButton", command=self._choose_subtitle_color).pack(side="left")
         ttk.Label(tools, text="SRT ကို job folder ထဲမှာ subtitles_myanmar.srt အဖြစ်လည်း သိမ်းပေးမယ်", style="Muted.TLabel").grid(
-            row=27, column=0, sticky="w", pady=(2, 10)
+            row=32, column=0, sticky="w", pady=(2, 10)
         )
         self._bind_wheel_recursive(tools, tools_canvas)
         # Job resume / config loads set the IntVars directly; keep the sliders in step.
@@ -612,7 +635,8 @@ class App(tk.Tk):
         self._save_pane_layout()
         self.splitter_tab.shutdown()
         try:
-            self.cfg["last_tool_tab"] = "splitter" if self.tools_tabs.select() == str(self.splitter_tab) else "recap"
+            selected = self.tools_tabs.select()
+            self.cfg["last_tool_tab"] = "splitter" if selected == str(self.splitter_tab) else ("subtitle" if selected == str(self.subtitle_tab) else "recap")
             save_config(self.cfg)
         except Exception:
             pass
@@ -711,6 +735,21 @@ class App(tk.Tk):
             self.extra_opacity_label.configure(text=f"{float(self.extra_text_opacity.get())*100:.0f}%")
         except Exception:
             pass
+    def _subtitle_int_changed(self, value: str, target: tk.Variable, label_attr: str) -> None:
+        number = int(round(float(value)))
+        target.set(number)
+        getattr(self, label_attr).configure(text=str(number))
+        self._redraw_editor_items()
+    def _subtitle_opacity_changed(self, value: str) -> None:
+        self.subtitle_opacity.set(float(value))
+        self.subtitle_opacity_label.configure(text=f"{float(value)*100:.0f}%")
+        self._redraw_editor_items()
+    def _choose_subtitle_color(self) -> None:
+        picked = colorchooser.askcolor(color=self.subtitle_color.get(), title="Choose subtitle color")
+        if picked and picked[1]:
+            self.subtitle_color.set(picked[1].upper())
+            self.subtitle_color_swatch.configure(bg=picked[1])
+            self._redraw_editor_items()
 
     def _persist_logo_choice(self) -> None:
         """Persist logo enable/path immediately so a removed logo cannot return on restart."""
@@ -808,6 +847,33 @@ class App(tk.Tk):
         except Exception as exc:
             self._log(f"⚠️ Preview frame error: {exc}")
 
+    def _preview_subtitle_row(self) -> dict | None:
+        source = self.source.get().strip()
+        if not source:
+            return None
+        job = self.current_job or _job_dir_for(Path(source))
+        plan = job / "edge_tts_smart_sync" / "smart_sync_plan_edge_tts.json"
+        if not plan.is_file():
+            return None
+        try:
+            from subtitle_service import subtitle_segments
+            rows = subtitle_segments(json.loads(plan.read_text(encoding="utf-8")))
+            now = float(self.preview_time.get())
+            return next((row for row in rows if row["start"] <= now <= row["end"]), None)
+        except Exception:
+            return None
+
+    @staticmethod
+    def _blend_preview_colour(hex_colour: str, opacity: float, background: str = "#0d0f14") -> str:
+        try:
+            c = str(hex_colour).lstrip("#")
+            r, g, b = (int(c[i:i + 2], 16) for i in (0, 2, 4))
+            br, bg, bb = (int(background.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+            a = max(0.0, min(1.0, float(opacity)))
+            return "#" + "".join(f"{round(base + (src - base) * a):02x}" for src, base in ((r, br), (g, bg), (b, bb)))
+        except Exception:
+            return "#ffffff"
+
     def _redraw_editor_items(self) -> None:
         if not hasattr(self, "preview_canvas"):
             return
@@ -842,6 +908,20 @@ class App(tk.Tk):
             fill = f"#{shade:02x}{shade:02x}{shade:02x}"
             c.create_text(ex+2, ey+2, text=extra_txt, fill="#101010", anchor="center", font=("Myanmar Text", efs, "bold"), width=int(pw*0.78), tags=("editor", "extra_text"))
             c.create_text(ex, ey, text=extra_txt, fill=fill, anchor="center", font=("Myanmar Text", efs, "bold"), width=int(pw*0.78), tags=("editor", "extra_text"))
+
+        if self.subtitle_enabled.get():
+            row = self._preview_subtitle_row()
+            if row:
+                position = self.subtitle_position.get()
+                x = ox + pw * (0.5 if "Left" not in position and "Right" not in position else (0.08 if "Left" in position else 0.92))
+                y = oy + ph * (0.14 if "Top" in position else (0.50 if "Middle" in position or position == "Center" else 0.88))
+                anchor = "center" if "Center" in position or position == "Center" else ("w" if "Left" in position else "e")
+                sfs = max(10, int(self.subtitle_font_size.get() * pw / self._output_canvas()[0]))
+                fill = self._blend_preview_colour(self.subtitle_color.get(), self.subtitle_opacity.get())
+                c.create_text(x + 2, y + 2, text=row["text"], fill="#000000", anchor=anchor,
+                              font=("Myanmar Text", sfs, "bold"), width=int(pw * 0.86), tags=("editor", "subtitle"))
+                c.create_text(x, y, text=row["text"], fill=fill, anchor=anchor,
+                              font=("Myanmar Text", sfs, "bold"), width=int(pw * 0.86), tags=("editor", "subtitle"))
 
         logo = self.logo_path.get().strip() if self.logo_enabled.get() else ""
         if logo and Path(logo).is_file():
@@ -1072,6 +1152,9 @@ class App(tk.Tk):
                     self.subtitle_position.set(position if position in POSITIONS else "Bottom Center")
                     self.subtitle_font_size.set(int(ed.get("subtitle_font_size", self.subtitle_font_size.get())))
                     self.subtitle_margin.set(int(ed.get("subtitle_margin", self.subtitle_margin.get())))
+                    self.subtitle_color.set(str(ed.get("subtitle_color", self.subtitle_color.get())))
+                    self.subtitle_opacity.set(float(ed.get("subtitle_opacity", self.subtitle_opacity.get())))
+                    self.subtitle_color_swatch.configure(bg=self.subtitle_color.get())
                 except Exception as exc:
                     self._log(f"⚠️ Editor layout resume error: {exc}")
             self.job_display.set(f"Job: {job.name}")
@@ -1115,6 +1198,8 @@ class App(tk.Tk):
         self.cfg["subtitle_position"] = settings["overlays"].get("subtitle_position", "Bottom Center")
         self.cfg["subtitle_font_size"] = settings["overlays"].get("subtitle_font_size", 30)
         self.cfg["subtitle_margin"] = settings["overlays"].get("subtitle_margin", 42)
+        self.cfg["subtitle_color"] = settings["overlays"].get("subtitle_color", "#FFFFFF")
+        self.cfg["subtitle_opacity"] = settings["overlays"].get("subtitle_opacity", 1.0)
         self.cfg["preview_seek_seconds"] = float(self.preview_time.get())
         save_config(self.cfg)
 
@@ -1166,6 +1251,8 @@ class App(tk.Tk):
             "subtitle_position": self.subtitle_position.get() if self.subtitle_position.get() in POSITIONS else "Bottom Center",
             "subtitle_font_size": max(10, min(96, int(self.subtitle_font_size.get()))),
             "subtitle_margin": max(0, min(500, int(self.subtitle_margin.get()))),
+            "subtitle_color": self.subtitle_color.get(),
+            "subtitle_opacity": max(0.10, min(1.00, float(self.subtitle_opacity.get()))),
         }
         if overlays["logo_path"] and not Path(overlays["logo_path"]).is_file():
             raise ValueError("Logo image path မမှန်ပါ။")

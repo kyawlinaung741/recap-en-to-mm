@@ -27,6 +27,7 @@ Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
 5. **အသံထုတ်** — Edge TTS မြန်မာအသံ (Thiha ယောက်ျားသံ / Nilar မိန်းမသံ) နဲ့ ထုတ်တယ်။ "Short pauses" ဖွင့်ထားရင် Edge ထည့်တတ်တဲ့ အသံတိတ်ကို ဖြတ်လို့ စာကြောင်းကြားမှာ ~၀.၂၅ စက္ကန့်ပဲ နားတယ်။
 6. **Smart Sync** — မြန်မာအသံက အချိန်ကို ဦးဆောင်ပြီး ရုပ်က လိုက်ညှိတယ်။ အသေးစိတ်ကို [Smart Sync ဘယ်လိုအလုပ်လုပ်လဲ](#smart-sync-ဘယ်လိုအလုပ်လုပ်လဲ) မှာ ကြည့်ပါ။
 7. **ဖြည့်စွက်** — Blur box (မူရင်း watermark/စာတန်းဖုံးဖို့)၊ Title၊ Logo၊ Extra text၊ Zoom၊ Flip တွေကို preview ပေါ်မှာ နေရာချပြီး ထည့်လို့ရတယ်။ Video အချိုး (**16:9 / 9:16 / 1:1 / Original**) ကိုလည်း ရွေးလို့ရတယ်။
+8. **Myanmar Subtitle Editor** — မြန်မာ Voice ရဲ့ `audio_start` / `audio_end` timing ကို အခြေခံပြီး voice-synced `.srt` ထုတ်ပေးတယ်။ Recap tab မှာ subtitle ကို preview ကြည့်ပြီး Location၊ Color၊ Size၊ Opacity၊ Margin ပြင်နိုင်တယ်။ သီးခြား **Subtitle** tab မှာ ရှိပြီးသား Video + SRT ကို ပြန်စစ်ပြီး `SRT only`၊ `Soft subtitle MP4`၊ `Burn-in MP4`၊ `Both` အဖြစ် export လုပ်နိုင်တယ်။
 
 ထွက်လာတဲ့ video မှာ **မြန်မာအသံပဲ** ပါတယ်။ မူရင်း English အသံနဲ့ နောက်ခံသီချင်း မပါဘူး။
 
@@ -71,6 +72,7 @@ Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
 | ဘယ်ဘက် | **Source language** (Auto-detect / English / Chinese / Hindi / Korean / …)၊ **Edge TTS Voice** (`my-MM-ThihaNeural` / `my-MM-NilarNeural`) နဲ့ **Edge TTS Speed** (−50% … +100%) ကို ရွေးပါ။ အောက်က **Run Logs** မှာ အလုပ်လုပ်နေတာတွေ ပြပါတယ်။ |
 | အလယ် | **Preview** — slider နဲ့ `◀ 5s` / `5s ▶` နဲ့ ကြည့်ချင်တဲ့ အချိန်ကို ရွှေ့ပြီး **Refresh Frame** နှိပ်ပါ။ Title၊ Logo၊ Extra text ကို ဆွဲရွှေ့ပြီး နေရာချလို့ရပါတယ်။ Blur box ကို ဆွဲလို့ရပါတယ်။ |
 | ညာဘက် | **Production Tools** — Zoom (1.00–1.25×)၊ Flip (ဘယ်ညာ ပြောင်းပြန်)၊ Voice vol (50–300%)၊ Short pauses၊ **Ratio** (16:9 / 9:16 / 1:1 / Original) နဲ့ **Fill** (Blur background / Black bars / Crop to fill)၊ **+ Draw Blur Box** / Delete Selected၊ Title (စာ၊ အရွယ်)၊ Logo (ဖိုင်၊ အရွယ်၊ အလင်းဖောက်မှု)၊ Extra Text Box။ |
+| **Myanmar Subtitles** | Voice-synced subtitle ကို preview ပေါ်မှာ ကြည့်ပါ။ Location၊ Color၊ Size၊ Opacity၊ Margin ကို ရွေး/slider ဆွဲပြီး ပြင်ပါ။ |
 | အောက်ခြေ | **START / RESUME** — စတယ် (ရပ်ထားတာဆိုရင် ဆက်လုပ်တယ်)။ **STOP SAFELY** — အခု လုပ်နေတဲ့ အဆင့်ပြီးမှ ရပ်ပြီး လုပ်ပြီးသမျှ သိမ်းထားတယ်။ **Open Job Folder** — ထွက်လာတဲ့ ဖိုင်တွေ ဖွင့်ကြည့်ဖို့။ **Edit Text** — မြန်မာ narration ကို စာကြောင်းလိုက် ပြင်ဖို့ (အောက်မှာ ကြည့်ပါ)။ |
 
 **ထွက်လာတဲ့ ဖိုင်:** `jobs\<video နာမည်>_<code>\edge_tts_smart_sync\final_edge_tts_smart_sync.mp4`
@@ -80,6 +82,176 @@ Job folder ထဲမှာ ကြည့်လို့ရတဲ့ ဖိုင�
 - `timestamp_translations.json` — စာပိုင်းတိုင်းရဲ့ မူရင်း နဲ့ မြန်မာ
 - `smart_sync_plan.json` — အချိန်ညှိထားတဲ့ plan
 - `run.log` — အလုပ်လုပ်သွားတဲ့ မှတ်တမ်း
+
+
+## Myanmar Subtitle Editor
+
+ဒီ Feature က မြန်မာ Voice နဲ့ Subtitle ကို တစ်ချိန်တည်းကိုက်ညီအောင် `.srt` ထုတ်ပေးပြီး Video ထဲမှာ Burn-in လုပ်နိုင်ခြင်း၊ MP4 ထဲမှာ Soft Subtitle Track ထည့်နိုင်ခြင်းတို့ကို ပေးပါတယ်။ Subtitle အချိန်အတွက် မူရင်း Video Timestamp ကို တိုက်ရိုက်မသုံးဘဲ Edge TTS ပြုလုပ်ပြီးနောက် ရလာတဲ့ `audio_start` / `audio_end` ကို master clock အဖြစ် သုံးပါတယ်။ ဒါကြောင့် Short pauses ဖွင့်/ပိတ်ထားမှုနဲ့ မြန်မာ Voice အရှည်ပြောင်းမှုအတိုင်း Subtitle က လိုက်ညှိပေးပါတယ်။
+
+### ဘာလုပ်ပေးလဲ
+
+- Recap render ပြီးရင် `subtitles_myanmar.srt` ကို အလိုအလျောက် ထုတ်ပေးပါတယ်။
+- Recap tab ရဲ့ **Myanmar Subtitles (voice-synced)** section မှာ လက်ရှိ Preview time အတွင်းရှိ Subtitle စာကြောင်းကို Video Preview ပေါ်မှာ ပြပါတယ်။
+- Subtitle Location ကို Top / Middle / Bottom နှင့် Left / Center / Right အဖြစ် ရွေးနိုင်ပါတယ်။
+- **Color** ကို color picker နဲ့ ရွေးနိုင်ပါတယ်။ **Size**, **Opacity**, **Margin** ကို ဘေးဆွဲ slider နဲ့ ပြင်ပြီး လက်ရှိတန်ဖိုးကို UI မှာ မြင်နိုင်ပါတယ်။
+- သီးခြား **Subtitle** tab မှာ ရှိပြီးသား Video နဲ့ voice-synced `.srt` ကို ရွေးပြီး Video frame + Subtitle Preview ကြည့်နိုင်ပါတယ်။
+- Export Mode အနေနဲ့ `SRT only`, `Soft subtitle MP4`, `Burn-in MP4`, `Both` ကို ရွေးနိုင်ပါတယ်။ Checkbutton သုံးခု (`Generate SRT file`, `Add soft subtitle track`, `Burn subtitles into video`) ကိုလည်း လိုသလို ဖွင့်/ပိတ်နိုင်ပါတယ်။
+
+### Recap tab မှာ အသုံးပြုနည်း
+
+1. `RUN.bat` ကို ဖွင့်ပြီး Source Video ရွေးပါ။
+2. ပုံမှန် Recap အလုပ်ပြီးသွားတဲ့နောက် ညာဘက် **Myanmar Subtitles (voice-synced)** section ကို သွားပါ။
+3. `Burn subtitles into final MP4` ကို ဖွင့်ထားပါက Final MP4 ထဲ Subtitle ပါသွားပါမယ်။ SRT ဖိုင်ကို သီးခြားရချင်ရင် ဒီ option တစ်ခုတည်းကို ပိတ်ထားလည်း SRT ကို အလိုအလျောက် ထုတ်ပေးပါတယ်။
+4. `Location`, `Color`, `Size`, `Opacity`, `Margin` ကို ပြင်ပါ။ Preview time slider ကို ရွှေ့ပြီး လက်ရှိ Subtitle စာကြောင်းကို ကြည့်ပါ။
+5. `START / RESUME` ကို နှိပ်ပါ။ ယခင် job မှာ Audio ရှိပြီးသားဖြစ်ရင် Setting ပြောင်းထားသော final render ကို ပြန်လုပ်နိုင်ပါတယ်။
+
+### Subtitle tab မှာ ရှိပြီးသား Video + SRT ကို စမ်း/Export လုပ်နည်း
+
+1. Main UI ရဲ့ **Subtitle** tab ကို ဖွင့်ပါ။
+2. **Video → Browse** နဲ့ Video ရွေးပါ။
+3. **SRT → Browse** နဲ့ `subtitles_myanmar.srt` (သို့) ကိုယ်တိုင်ပြင်ထားတဲ့ `.srt` ဖိုင် ရွေးပါ။
+4. **Load / Refresh Preview** နှိပ်ပါ။ Preview time slider ကို ရွှေ့ပြီး စာကြောင်းမှန်တဲ့အချိန်မှာ ပေါ်မပေါ် စစ်ပါ။
+5. Location၊ Color၊ Size၊ Opacity၊ Margin ကို ပြင်ပါ။ Slider ဘေးမှာ Size/Margin တန်ဖိုးနဲ့ Opacity ရာခိုင်နှုန်း ပြပေးပါတယ်။
+6. လိုတဲ့ Mode ကို ရွေးပါ။ Mode ပြောင်းတဲ့အခါ သက်ဆိုင်ရာ Checkbutton တွေကို အလိုအလျောက်ညှိပေးပါတယ်။
+7. **Export Selected Mode** နှိပ်ပြီး Output folder ရွေးပါ။
+
+### Burn-in နှင့် Soft Subtitle ကွာခြားချက်
+
+| Mode | ရလဒ် | Subtitle ဖွင့်/ပိတ်နိုင်မှု |
+|---|---|---|
+| `SRT only` | `.srt` ဖိုင်သာ ထွက်သည် | Player မှာ SRT ကို သီးခြားရွေးရသည် |
+| `Soft subtitle MP4` | MP4 ထဲ `mov_text` track ထည့်သည် | VLC မှာ Subtitle Track ဖြင့် ဖွင့်/ပိတ်နိုင်သည် |
+| `Burn-in MP4` | စာတန်းကို Video frame ထဲ တစ်ခါတည်း ထည့်သည် | ဖွင့်/ပိတ်၍ မရပါ |
+| `Both` | Soft Track ပါသော MP4 နှင့် Burn-in MP4 နှစ်မျိုး ထွက်သည် | Soft version မှာ ဖွင့်/ပိတ်နိုင်သည် |
+
+Output ဖိုင်များကို Subtitle tab မှာ ရွေးထားတဲ့ folder ထဲမှာ ဒီလို သိမ်းပါတယ်:
+
+```text
+<video_name>_Myanmar.srt
+<video_name>_soft.mp4
+<video_name>_burned.mp4
+```
+
+Recap job ကနေ အလိုအလျောက်ထွက်တဲ့ဖိုင်က:
+
+```text
+jobs\\<video_name>_<code>\\edge_tts_smart_sync\\subtitles_myanmar.srt
+```
+
+### အသေးစိတ် Test လုပ်နည်း
+
+#### Test 1 — Unit test (Code logic)
+
+Repository root မှာ Command Prompt ဖွင့်ပြီး run ပါ:
+
+```bat
+py -3.12 -m unittest tests/test_subtitle_service.py -v
+```
+
+အောင်မြင်ရင် `Ran 4 tests` နှင့် `OK` လို့ ပြပါမယ်။ ဒီ Test က:
+
+- Subtitle က `tts_timing_segments` ထဲက Voice timing ကို အသုံးပြုမပြု
+- SRT timestamp ကို `HH:MM:SS,mmm` ပုံစံမှန်မှန်ထုတ်မထုတ်
+- Top / Center / Bottom Position mapping မှန်မမှန်
+- Color နဲ့ Opacity ကို FFmpeg/ASS color format မှန်မှန်ပြောင်းမပြောင်း
+
+စစ်ပေးပါတယ်။
+
+#### Test 2 — Recap ကနေ SRT ထုတ်ခြင်း
+
+1. အသံရှင်းတဲ့ ၁–၃ မိနစ် Video တစ်ခုရွေးပါ။
+2. `START / RESUME` နဲ့ Recap render ပြီးအောင်စောင့်ပါ။
+3. Job folder ထဲက အောက်ပါဖိုင်ကို ဖွင့်ပါ:
+
+```text
+edge_tts_smart_sync\\subtitles_myanmar.srt
+```
+
+4. Notepad နဲ့ဖွင့်ပြီး ဒီလို Timestamp ရှိမရှိစစ်ပါ:
+
+```srt
+1
+00:00:00,000 --> 00:00:01,250
+မြန်မာစာကြောင်း ပထမတစ်ကြောင်း။
+```
+
+5. `smart_sync_plan_edge_tts.json` ထဲက `tts_timing_segments` ရဲ့ `audio_start` / `audio_end` နဲ့ SRT အချိန်ကို နှိုင်းယှဉ်ပါ။ တန်ဖိုးတူရပါမယ်။
+
+#### Test 3 — Main Recap Preview
+
+1. Recap tab မှာ Source Video ရွေးပါ။
+2. အရင် render ပြီးသား job ရှိပါက Preview time slider ကို Subtitle ရှိတဲ့ အချိန်သို့ ရွှေ့ပါ။
+3. Subtitle စာကြောင်းက Video Preview ပေါ်မှာ ပေါ်ရပါမယ်။
+4. Location ပြောင်းပြီး စာတန်းနေရာပြောင်းမပြောင်းစစ်ပါ။
+5. Color picker ကနေ အနီ/အဝါ စတဲ့အရောင်ရွေးပြီး စာတန်းအရောင်ပြောင်းမပြောင်းစစ်ပါ။
+6. Size, Opacity, Margin slider ဆွဲပြီး Preview မှာ ချက်ချင်းပြောင်းမပြောင်းစစ်ပါ။ Opacity ကို `50%` ထားရင် စာတန်းက တစ်ဝက်ပွင့်လင်းသလို မြင်ရပါမယ်။
+
+#### Test 4 — Subtitle tab Preview
+
+1. Subtitle tab ကို ဖွင့်ပါ။
+2. အထက်က ထုတ်ထားတဲ့ Video နဲ့ `subtitles_myanmar.srt` ကို ရွေးပါ။
+3. **Load / Refresh Preview** နှိပ်ပါ။ Video frame ပေါ်မှာ လက်ရှိ Subtitle ပေါ်ရပါမယ်။
+4. Preview time slider ကို Subtitle မရှိတဲ့အချိန်သို့ ရွှေ့လျှင် စာတန်းမပေါ်သင့်ပါ။ Subtitle ရှိတဲ့အချိန်သို့ ပြန်ရွှေ့လျှင် ပြန်ပေါ်ရပါမယ်။
+5. Location, Color, Size, Opacity, Margin ကို တစ်ခုချင်းစီ ပြောင်းပြီး Preview ကိုစစ်ပါ။
+
+#### Test 5 — SRT only export
+
+1. Mode ကို `SRT only` ရွေးပါ။
+2. `Generate SRT file` ကို ဖွင့်ထားပါ။
+3. **Export Selected Mode** နှိပ်ပြီး Output folder ရွေးပါ။
+4. `<video_name>_Myanmar.srt` ထွက်လာမလာစစ်ပါ။ ဖိုင်ကို Notepad နဲ့ဖွင့်ပြီး Myanmar စာသားနှင့် Timestamp ရှိမရှိစစ်ပါ။
+
+#### Test 6 — Soft Subtitle export
+
+1. Mode ကို `Soft subtitle MP4` ရွေးပါ။
+2. Export ပြီးရင် `<video_name>_soft.mp4` ကို VLC နဲ့ဖွင့်ပါ။
+3. VLC menu မှာ `Subtitle → Subtitle Track → Myanmar` ကို ရွေးပါ။
+4. Subtitle Track ကို Disable လုပ်လျှင် စာတန်းပျောက်ပြီး Video ပုံက မပြောင်းလဲဘဲ ကျန်ရပါမယ်။
+5. Command Prompt ကနေ Track ပါမပါ ထပ်စစ်ချင်ရင်:
+
+```bat
+ffprobe -v error -select_streams s -show_entries stream=codec_name:stream_tags=language,title -of default=noprint_wrappers=1 "<video_name>_soft.mp4"
+```
+
+`codec_name=mov_text`, `TAG:language=mya`, `TAG:title=Myanmar` လို့ တွေ့ရပါမယ်။
+
+#### Test 7 — Burn-in export
+
+1. Mode ကို `Burn-in MP4` ရွေးပါ။
+2. Export ပြီးရင် `<video_name>_burned.mp4` ကို VLC နဲ့ဖွင့်ပါ။
+3. Subtitle Track ကို Disable လုပ်ထားသော်လည်း Subtitle ဆက်မြင်နေရပါမယ်။ ဒါက Burn-in အောင်မြင်တာကို ပြပါတယ်။
+4. Subtitle က မြန်မာ Voice နဲ့ တစ်ချိန်တည်းစပြီး တစ်ချိန်တည်းပျောက်မပျောက် စစ်ပါ။
+
+#### Test 8 — Both mode
+
+1. Mode ကို `Both` ရွေးပါ။
+2. Export ပြီးရင် Soft Subtitle Track ပါတဲ့ MP4 နဲ့ Burn-in MP4 နှစ်မျိုး ထွက်မထွက်စစ်ပါ။
+3. Burn-in version မှာ Track ပိတ်လည်း စာတန်းမြင်ရမယ်။ Soft version မှာ Track ပိတ်ရင် စာတန်းပျောက်ရမယ်။
+
+### Subtitle Test မှာ အဖြစ်များသော ပြဿနာများ
+
+| ပြဿနာ | စစ်ဆေး/ဖြေရှင်းနည်း |
+|---|---|
+| Preview မှာ Subtitle မပေါ် | မှန်ကန်တဲ့ voice-synced `.srt` ရွေးထားမထား၊ Preview time က Subtitle အချိန်အတွင်း ရှိမရှိ စစ်ပါ။ |
+| SRT အချိန်နဲ့ Voice မကိုက် | မူရင်း Whisper SRT မဟုတ်ဘဲ `edge_tts_smart_sync\\subtitles_myanmar.srt` ကို သုံးပါ။ |
+| မြန်မာစာ အက္ခရာပျက် | Windows မှာ Myanmar Unicode font ရှိမရှိစစ်ပြီး `Myanmar Text` font သုံးပါ။ |
+| Burn-in export မအောင်မြင် | FFmpeg/FFprobe ရှိမရှိစစ်ပါ။ `INSTALL_REQUIREMENTS.bat` ကို ပြန် run ပါ။ |
+| Soft Subtitle VLC မှာ မပေါ် | VLC ရဲ့ `Subtitle → Subtitle Track` မှာ Myanmar track ကို ရွေးပါ။ `ffprobe` နဲ့ `mov_text` track ပါမပါ စစ်ပါ။ |
+| Slider ပြောင်းပေမဲ့ Video မပြောင်း | **Load / Refresh Preview** ပြန်နှိပ်ပြီး Preview frame ကို ပြန်တင်ပါ။ |
+
+### Subtitle output timing ကို ကိုယ်တိုင် စစ်ချင်လျှင်
+
+`smart_sync_plan_edge_tts.json` ထဲမှာ အောက်ပါ field တွေကို ကြည့်ပါ:
+
+```json
+{
+  "audio_start": 0.0,
+  "audio_end": 1.25,
+  "text": "မြန်မာစာကြောင်း"
+}
+```
+
+`audio_start` / `audio_end` က မြန်မာ Voice timeline ဖြစ်ပြီး `.srt` ရဲ့ အစ/အဆုံး timestamp နဲ့ တူရပါမယ်။ `video_start` / `video_end` က မူရင်းရုပ်ရဲ့ timing ဖြစ်လို့ Subtitle sync အတွက် အဓိကမသုံးပါ။
 
 ## Splitter (ဗီဒီယို အပိုင်းခွဲ)
 
@@ -194,6 +366,8 @@ app/
   preview_tools.py         Preview frame / logo
   splitter.py              Splitter: ဘယ်မှာ ဖြတ်မလဲ (smart cut)၊ အပိုင်း render
   splitter_tab.py          Splitter tab UI
+  subtitle_service.py      Voice-synced SRT, color styling, soft/burn-in export
+  subtitle_tab.py          Subtitle preview and export tab UI
   launch.ps1               Python ရှာပြီး UI ဖွင့်တာ
 recap_runtime/services/
   whisper_service.py       faster-whisper (GPU / CPU)
@@ -206,9 +380,15 @@ tests/                     python -m unittest discover -s tests
 ## Test
 
 ```bat
-py -3.12 -m unittest discover -s tests
+py -3.12 -m unittest discover -s tests -v
 ```
-Internet မလိုပါဘူး။ Gemini ကို အတုနဲ့ အစားထိုး စမ်းပါတယ်။
+Subtitle logic ကို သီးခြားစမ်းရန်:
+
+```bat
+py -3.12 -m unittest tests/test_subtitle_service.py -v
+```
+
+Internet မလိုပါဘူး။ Gemini ကို အတုနဲ့ အစားထိုး စမ်းပါတယ်။ Subtitle UI/Export ကိုတော့ **Myanmar Subtitle Editor → အသေးစိတ် Test လုပ်နည်း** အပိုင်းအတိုင်း Windows မှာ ကိုယ်တိုင်စမ်းပါ။
 
 ## သတိပြုရန်
 
@@ -330,30 +510,3 @@ Result: `jobs\<name>_<code>\edge_tts_smart_sync\final_edge_tts_smart_sync.mp4`
 ### Notes
 Edge TTS is a Microsoft online service and Gemini is a Google API — follow their terms. You are
 responsible for the rights to the videos you process.
-
-
-## Myanmar Subtitle (Voice-synced)
-
-Recap render ပြီးတဲ့အခါ `smart_sync_plan_edge_tts.json` ထဲက TTS timing (`audio_start` / `audio_end`) ကို master clock အဖြစ်သုံးပြီး `edge_tts_smart_sync/subtitles_myanmar.srt` ကို အလိုအလျောက် ထုတ်ပေးပါတယ်။ ထို့ကြောင့် Subtitle က မူရင်း video timestamp မဟုတ်ဘဲ မြန်မာအသံနဲ့ တစ်ထပ်တည်း ပေါ်ပါတယ်။
-
-ညာဘက် **Production Tools → Myanmar Subtitles (voice-synced)** မှာ:
-
-- **Burn subtitles into final MP4** — Subtitle ကို video ထဲ တစ်ခါတည်းထည့်ရန် ဖွင့်/ပိတ်နိုင်ပါတယ်။
-- **Location** — Top / Middle / Bottom နှင့် Left / Center / Right ကို ရွေးနိုင်ပါတယ်။
-- **Font size** — Subtitle စာလုံးအရွယ်ကို 10–96 အတွင်း ပြင်နိုင်ပါတယ်။
-- **Margin** — Video အနားကွာဟမှုကို ပြင်နိုင်ပါတယ်။
-
-SRT ဖိုင်ကို သီးခြားသုံးလိုပါက `jobs\\<video>_<code>\\edge_tts_smart_sync\\subtitles_myanmar.srt` မှာ ရှိပါတယ်။ Burn-in ဖွင့်ထားရင် Output MP4 အသစ်ထဲမှာ Subtitle ပါပြီးသားဖြစ်ပါတယ်။
-
-
-## Subtitle preview and Subtitle tab
-
-Recap tab ရဲ့ **Myanmar Subtitles (voice-synced)** section မှာ လက်ရှိ TTS timing နဲ့ကိုက်တဲ့ subtitle စာကြောင်းကို video preview ပေါ်မှာ ကြည့်နိုင်ပါတယ်။ `Location`, `Color`, `Size`, `Opacity`, `Margin` ကို ပြင်နိုင်ပြီး Size / Opacity / Margin တွေမှာ ဘေးဆွဲ slider နဲ့ တန်ဖိုးပြထားပါတယ်။ Color ကို **Choose** နှိပ်ပြီး ရွေးနိုင်ပါတယ်။
-
-သီးခြား **Subtitle** tab မှာ ရှိပြီးသား video နဲ့ voice-synced `.srt` ကို ရွေးပြီး preview လုပ်နိုင်ပါတယ်။ ဒီ tab မှာလည်း Location၊ Color၊ Size၊ Opacity၊ Margin ကို ပြင်နိုင်ပါတယ်။ Export mode များမှာ `SRT only`, `Soft subtitle MP4`, `Burn-in MP4`, `Both` ပါဝင်ပြီး အောက်ပါ checkbutton များကိုလည်း သီးခြားဖွင့်/ပိတ်နိုင်ပါတယ်:
-
-- Generate SRT file
-- Add soft subtitle track
-- Burn subtitles into video
-
-Soft subtitle export က MP4 ထဲမှာ `mov_text` subtitle track အဖြစ် ထည့်ပေးပြီး Burn-in export က စာတန်းကို video frame ထဲ တစ်ခါတည်းထည့်ပေးပါတယ်။ Timing အတွက် ရှိပြီးသား SRT ထဲက အချိန်ကို မပြောင်းဘဲ အသုံးပြုပါတယ်။

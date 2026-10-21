@@ -34,6 +34,7 @@ class SubtitleTab(ttk.Frame):
         self.mode = tk.StringVar(value="Burn-in MP4")
         self._photo = None
         self._frame_photo = None
+        self._dragging_subtitle = False
         self._build()
 
     def _build(self) -> None:
@@ -59,6 +60,9 @@ class SubtitleTab(ttk.Frame):
         preview_box.columnconfigure(0, weight=1)
         self.canvas = tk.Canvas(preview_box, background="#10131a", highlightthickness=0, height=420)
         self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.canvas.bind("<Button-1>", self._drag_start)
+        self.canvas.bind("<B1-Motion>", self._drag_motion)
+        self.canvas.bind("<ButtonRelease-1>", lambda _e: setattr(self, "_dragging_subtitle", False))
         seek = ttk.Frame(preview_box)
         seek.grid(row=1, column=0, sticky="ew", pady=(8, 0))
         seek.columnconfigure(0, weight=1)
@@ -89,7 +93,7 @@ class SubtitleTab(ttk.Frame):
         ttk.Checkbutton(controls, text="Burn subtitles into video", variable=self.burn_in).grid(row=9, column=0, columnspan=2, sticky="w")
         ttk.Button(controls, text="Load / Refresh Preview", command=self._load).grid(row=10, column=0, columnspan=2, sticky="ew", pady=(14, 5))
         ttk.Button(controls, text="Export Selected Mode", command=self._export).grid(row=11, column=0, columnspan=2, sticky="ew")
-        ttk.Label(controls, text="အသံ timing ပါတဲ့ SRT ကိုပဲ ရွေးပါ။\nPreview time ရွှေ့ပြီး စာတန်းကို ကြည့်နိုင်ပါတယ်။", style="Muted.TLabel").grid(row=12, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        ttk.Label(controls, text="အသံ timing ပါတဲ့ SRT ကိုပဲ ရွေးပါ။\nPreview time ရွှေ့ပြီး စာတန်းကို ကြည့်ပါ။\nစာတန်းပေါ်မှာ Mouse ဖိဆွဲပြီး နေရာချနိုင်ပါတယ်။", style="Muted.TLabel").grid(row=12, column=0, columnspan=2, sticky="w", pady=(12, 0))
         self._draw()
 
     def _slider(self, parent, row, label, low, high, var, attr, suffix, steps=None):
@@ -181,6 +185,22 @@ class SubtitleTab(ttk.Frame):
             self.canvas.create_text(x + 2, y + 2, text=row["text"], fill="#000000", anchor=anchor, font=("Myanmar Text", max(12, int(self.font_size.get() * w / 1280)), "bold"), width=int(w * .86))
             self.canvas.create_text(x, y, text=row["text"], fill=self.color.get(), anchor=anchor, font=("Myanmar Text", max(12, int(self.font_size.get() * w / 1280)), "bold"), width=int(w * .86))
         self.time_label.configure(text=f"{int(now)//60}:{int(now)%60:02d} / {int(self.duration)//60}:{int(self.duration)%60:02d}")
+
+    def _drag_start(self, event):
+        now = float(self.preview_time.get())
+        if any(row["start"] <= now <= row["end"] for row in self.rows):
+            self._dragging_subtitle = True
+            self._drag_motion(event)
+
+    def _drag_motion(self, event):
+        if not self._dragging_subtitle:
+            return
+        w = max(320, self.canvas.winfo_width())
+        h = max(180, self.canvas.winfo_height())
+        horizontal = "Left" if event.x < w * .34 else ("Right" if event.x > w * .66 else "Center")
+        vertical = "Top" if event.y < h * .34 else ("Bottom" if event.y > h * .66 else "Middle")
+        self.position.set("Center" if vertical == "Middle" and horizontal == "Center" else f"{vertical} {horizontal}")
+        self._draw()
 
     def _choose_color(self):
         picked = colorchooser.askcolor(color=self.color.get(), title="Choose subtitle color")

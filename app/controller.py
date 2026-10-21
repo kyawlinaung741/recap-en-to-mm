@@ -961,6 +961,8 @@ class App(tk.Tk):
                 self._drag_kind="title"; break
             if "extra_text" in t:
                 self._drag_kind="extra_text"; break
+            if "subtitle" in t:
+                self._drag_kind="subtitle"; break
             if "logo" in t:
                 self._drag_kind="logo"; self._drag_original=list(self.logo_pos); break
             if blur:
@@ -980,6 +982,15 @@ class App(tk.Tk):
             self.title_pos=[(x-ox)/pw, (y-oy)/ph]
         elif self._drag_kind == "extra_text":
             self.extra_text_pos=[(x-ox)/pw, (y-oy)/ph]
+        elif self._drag_kind == "subtitle":
+            nx = (x - ox) / pw
+            ny = (y - oy) / ph
+            horizontal = "Left" if nx < 0.34 else ("Right" if nx > 0.66 else "Center")
+            vertical = "Top" if ny < 0.34 else ("Bottom" if ny > 0.66 else "Middle")
+            self.subtitle_position.set(
+                "Center" if vertical == "Middle" and horizontal == "Center"
+                else f"{vertical} {horizontal}"
+            )
         elif self._drag_kind == "logo":
             lx,ly=self._drag_original
             self.logo_pos=[max(0.0,min(0.95,lx+dx)), max(0.0,min(0.95,ly+dy))]

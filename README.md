@@ -91,10 +91,10 @@ Job folder ထဲမှာ ကြည့်လို့ရတဲ့ ဖိုင�
 ### ဘာလုပ်ပေးလဲ
 
 - Recap render ပြီးရင် `subtitles_myanmar.srt` ကို အလိုအလျောက် ထုတ်ပေးပါတယ်။
-- Recap tab ရဲ့ **Myanmar Subtitles (voice-synced)** section မှာ လက်ရှိ Preview time အတွင်းရှိ Subtitle စာကြောင်းကို Video Preview ပေါ်မှာ ပြပါတယ်။
+- Recap tab ရဲ့ **Myanmar Subtitles (voice-synced)** section မှာ လက်ရှိ Preview time အတွင်းရှိ Subtitle စာကြောင်းကို Video Preview ပေါ်မှာ တိုက်ရိုက်ပြပါတယ်။ စာကြောင်းကို Preview ပေါ်မှာ Mouse နဲ့ ဖိဆွဲပြီး ပေါ်စေချင်တဲ့ နေရာကို ရွှေ့နိုင်ပါတယ်။ App က ဆွဲထားတဲ့နေရာကို အနီးဆုံး `Top / Middle / Bottom + Left / Center / Right` နေရာအဖြစ် သတ်မှတ်ပေးပါတယ်။
 - Subtitle Location ကို Top / Middle / Bottom နှင့် Left / Center / Right အဖြစ် ရွေးနိုင်ပါတယ်။
 - **Color** ကို color picker နဲ့ ရွေးနိုင်ပါတယ်။ **Size**, **Opacity**, **Margin** ကို ဘေးဆွဲ slider နဲ့ ပြင်ပြီး လက်ရှိတန်ဖိုးကို UI မှာ မြင်နိုင်ပါတယ်။
-- သီးခြား **Subtitle** tab မှာ ရှိပြီးသား Video နဲ့ voice-synced `.srt` ကို ရွေးပြီး Video frame + Subtitle Preview ကြည့်နိုင်ပါတယ်။
+- သီးခြား **Subtitle** tab မှာ ရှိပြီးသား Video နဲ့ voice-synced `.srt` ကို ရွေးပြီး Video frame + Subtitle စာကြောင်းကို Preview ကြည့်နိုင်ပါတယ်။ စာကြောင်းပေါ်မှာ Mouse ဖိဆွဲပြီး နေရာရွှေ့နိုင်ပါတယ်။
 - Export Mode အနေနဲ့ `SRT only`, `Soft subtitle MP4`, `Burn-in MP4`, `Both` ကို ရွေးနိုင်ပါတယ်။ Checkbutton သုံးခု (`Generate SRT file`, `Add soft subtitle track`, `Burn subtitles into video`) ကိုလည်း လိုသလို ဖွင့်/ပိတ်နိုင်ပါတယ်။
 
 ### Recap tab မှာ အသုံးပြုနည်း
@@ -102,7 +102,7 @@ Job folder ထဲမှာ ကြည့်လို့ရတဲ့ ဖိုင�
 1. `RUN.bat` ကို ဖွင့်ပြီး Source Video ရွေးပါ။
 2. ပုံမှန် Recap အလုပ်ပြီးသွားတဲ့နောက် ညာဘက် **Myanmar Subtitles (voice-synced)** section ကို သွားပါ။
 3. `Burn subtitles into final MP4` ကို ဖွင့်ထားပါက Final MP4 ထဲ Subtitle ပါသွားပါမယ်။ SRT ဖိုင်ကို သီးခြားရချင်ရင် ဒီ option တစ်ခုတည်းကို ပိတ်ထားလည်း SRT ကို အလိုအလျောက် ထုတ်ပေးပါတယ်။
-4. `Location`, `Color`, `Size`, `Opacity`, `Margin` ကို ပြင်ပါ။ Preview time slider ကို ရွှေ့ပြီး လက်ရှိ Subtitle စာကြောင်းကို ကြည့်ပါ။
+4. Preview time slider ကို ရွှေ့ပြီး လက်ရှိ Subtitle စာကြောင်းကို ကြည့်ပါ။ စာကြောင်းပေါ်မှာ Mouse ဖိဆွဲပြီး ပေါ်စေချင်တဲ့နေရာကို ချိန်ပါ။ ထို့နောက် `Location`, `Color`, `Size`, `Opacity`, `Margin` ကို ပြင်ပါ။
 5. `START / RESUME` ကို နှိပ်ပါ။ ယခင် job မှာ Audio ရှိပြီးသားဖြစ်ရင် Setting ပြောင်းထားသော final render ကို ပြန်လုပ်နိုင်ပါတယ်။
 
 ### Subtitle tab မှာ ရှိပြီးသား Video + SRT ကို စမ်း/Export လုပ်နည်း
@@ -192,7 +192,7 @@ edge_tts_smart_sync\\subtitles_myanmar.srt
 2. အထက်က ထုတ်ထားတဲ့ Video နဲ့ `subtitles_myanmar.srt` ကို ရွေးပါ။
 3. **Load / Refresh Preview** နှိပ်ပါ။ Video frame ပေါ်မှာ လက်ရှိ Subtitle ပေါ်ရပါမယ်။
 4. Preview time slider ကို Subtitle မရှိတဲ့အချိန်သို့ ရွှေ့လျှင် စာတန်းမပေါ်သင့်ပါ။ Subtitle ရှိတဲ့အချိန်သို့ ပြန်ရွှေ့လျှင် ပြန်ပေါ်ရပါမယ်။
-5. Location, Color, Size, Opacity, Margin ကို တစ်ခုချင်းစီ ပြောင်းပြီး Preview ကိုစစ်ပါ။
+5. Subtitle စာကြောင်းပေါ်မှာ Mouse ဖိဆွဲပြီး အပေါ်/အလယ်/အောက်၊ ဘယ်/အလယ်/ညာ နေရာများသို့ ရွှေ့ပါ။ ထို့နောက် Location, Color, Size, Opacity, Margin ကို တစ်ခုချင်းစီ ပြောင်းပြီး Preview ကိုစစ်ပါ။
 
 #### Test 5 — SRT only export
 

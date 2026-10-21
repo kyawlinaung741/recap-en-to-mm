@@ -37,7 +37,7 @@ class WhisperTimestampService:
         self.model_size = model_size or os.getenv("WHISPER_MODEL", "medium")
         self.backend = (backend or os.getenv("WHISPER_BACKEND", "auto")).lower()
         self.device = device or os.getenv("WHISPER_DEVICE", "cuda")
-        self.compute_type = compute_type or os.getenv("WHISPER_COMPUTE_TYPE", "float16")
+        self.compute_type = compute_type or os.getenv("WHISPER_COMPUTE_TYPE", "int8_float32")
         self.language = language or os.getenv("WHISPER_LANGUAGE") or None
         self._model: Any = None
         self._active_backend: Optional[str] = None
@@ -109,31 +109,59 @@ class WhisperTimestampService:
             return False
 
         self._download_model_once()
-        try:
-            print(
-                f"🧠 Loading faster-whisper: model={self.model_size}, "
-                f"device={self.device}, compute={self.compute_type}"
-            )
-            self._model = WhisperModel(
-                self.model_size,
-                device=self.device,
-                compute_type=self.compute_type,
-            )
-            self._active_backend = "faster-whisper"
-            return True
-        except Exception as exc:
-            print(f"⚠️ faster-whisper GPU load failed: {exc}")
-            if self.device != "cpu":
-                try:
-                    print("↩️ faster-whisper CPU fallback (int8)")
-                    self._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
-                    self._active_backend = "faster-whisper"
-                    self.device = "cpu"
-                    self.compute_type = "int8"
-                    return True
-                except Exception as cpu_exc:
-                    print(f"⚠️ faster-whisper CPU fallback failed: {cpu_exc}")
-            return False
+        # Try the configured type first. If this GPU/backend rejects it (for example,
+        # GTX 10-series does not efficiently support float16 in CTranslate2), try only
+        # compute types reported as supported by CTranslate2 before falling back to CPU.
+        tried_types: set[str] = set()
+        gpu_types: list[str] = [self.compute_type]
+        if self.device != "cpu":
+            try:
+                import ctranslate2
+                supported = ctranslate2.get_supported_compute_types(self.device, 0)
+                for candidate in ("int8_float32", "int8", "float32"):
+                    if candidate in supported and candidate not in gpu_types:
+                        gpu_types.append(candidate)
+            except Exception as probe_exc:
+                print(f"⚠️ Could not query GPU compute types: {probe_exc}")
+
+        last_gpu_exc: Optional[Exception] = None
+        for compute_type in gpu_types:
+            if compute_type in tried_types:
+                continue
+            tried_types.add(compute_type)
+            try:
+                print(
+                    f"🧠 Loading faster-whisper: model={self.model_size}, "
+                    f"device={self.device}, compute={compute_type}"
+                )
+                self._model = WhisperModel(
+                    self.model_size,
+                    device=self.device,
+                    compute_type=compute_type,
+                )
+                self._active_backend = "faster-whisper"
+                self.compute_type = compute_type
+                if compute_type != gpu_types[0]:
+                    print(f"✅ GPU fallback selected compute_type={compute_type}")
+                return True
+            except Exception as exc:
+                last_gpu_exc = exc
+                print(f"⚠️ faster-whisper load failed (device={self.device}, compute={compute_type}): {exc}")
+
+        if self.device != "cpu":
+            try:
+                print("↩️ All available GPU compute types failed; trying CPU fallback (int8)")
+                self._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
+                self._active_backend = "faster-whisper"
+                self.device = "cpu"
+                self.compute_type = "int8"
+                print("✅ faster-whisper CPU fallback loaded")
+                return True
+            except Exception as cpu_exc:
+                print(f"⚠️ faster-whisper CPU fallback failed: {cpu_exc}")
+        elif last_gpu_exc is not None:
+            print(f"⚠️ faster-whisper CPU load failed: {last_gpu_exc}")
+        return False
 
     def _load_openai_whisper(self) -> bool:
         try:

@@ -985,6 +985,45 @@ def apply_production_overlays(
     return output_video
 
 
+def apply_subtitle_burn_in(
+    ffmpeg: str,
+    input_video: Path,
+    output_video: Path,
+    subtitle_file: Path,
+    overlays: dict[str, Any],
+    encoder: str,
+    log: LogFn = _noop,
+) -> Path:
+    """Burn Myanmar subtitles using the already-rendered TTS timeline."""
+    import sys
+    project_root = Path(__file__).resolve().parents[1]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+    from subtitle_service import burn_subtitles
+    args = _encoder_args(encoder)
+    try:
+        return burn_subtitles(
+            ffmpeg, input_video, subtitle_file, output_video,
+            position=str(overlays.get("subtitle_position", "Bottom Center")),
+            font_size=int(overlays.get("subtitle_font_size", 30)),
+            margin=int(overlays.get("subtitle_margin", 42)),
+            font_name=str(overlays.get("subtitle_font_name", "Myanmar Text")),
+            encoder_args=args,
+        )
+    except Exception:
+        if encoder == "h264_nvenc":
+            log("⚠️ Subtitle NVENC failed — libx264 fallback")
+            return burn_subtitles(
+                ffmpeg, input_video, subtitle_file, output_video,
+                position=str(overlays.get("subtitle_position", "Bottom Center")),
+                font_size=int(overlays.get("subtitle_font_size", 30)),
+                margin=int(overlays.get("subtitle_margin", 42)),
+                font_name=str(overlays.get("subtitle_font_name", "Myanmar Text")),
+                encoder_args=_encoder_args("libx264"),
+            )
+        raise
+
+
 @dataclass
 class PipelinePaths:
     root: Path
@@ -1261,6 +1300,13 @@ class EdgeSmartSync:
         ]
         out_plan["production_overlays"] = self.overlays
         atomic_write_json(paths.plan, out_plan)
+        # Keep a standalone UTF-8 SRT beside the synced plan. It uses the
+        # concatenated Myanmar TTS clock, never the original video timestamps.
+        from subtitle_service import write_srt
+        subtitle_file = paths.root / "subtitles_myanmar.srt"
+        write_srt(out_plan, subtitle_file)
+        out_plan["subtitle_file"] = str(subtitle_file)
+        atomic_write_json(paths.plan, out_plan)
 
         if not self.render_final_video:
             self.log("✅ Audio + Smart Sync plan READY (final video render skipped).")
@@ -1376,6 +1422,13 @@ class EdgeSmartSync:
             video_for_mux = apply_production_overlays(
                 self.ffmpeg, paths.synced_video_noaudio, paths.decorated_video_noaudio,
                 self.overlays, encoder, paths.work, self.log, frame_size=(layout["cw"], layout["ch"]),
+            )
+        if bool(self.overlays.get("subtitle_enabled", False)) and subtitle_file.is_file():
+            self.log("📝 Myanmar subtitles burn-in — voice timeline sync")
+            subtitle_video = paths.work / "video_with_myanmar_subtitles.mp4"
+            video_for_mux = apply_subtitle_burn_in(
+                self.ffmpeg, video_for_mux, subtitle_video, subtitle_file,
+                self.overlays, encoder, self.log,
             )
         self.log("🎧 Edge TTS audio mux...")
         volume_percent = int(getattr(self, "voice_volume_percent", 100) or 100)

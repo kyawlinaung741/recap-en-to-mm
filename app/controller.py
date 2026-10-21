@@ -21,6 +21,7 @@ from preview_tools import probe_duration as preview_probe_duration, extract_prev
 from narration_editor import NarrationEditor, failed_segment_from_error
 from splitter_tab import SplitterTab
 from recap_planner import SOURCE_LANGUAGES
+from subtitle_service import POSITIONS
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT_DIR / "config.json"
@@ -183,6 +184,12 @@ class App(tk.Tk):
         self.extra_text = tk.StringVar(value="")
         self.extra_text_size = tk.IntVar(value=int(self.cfg.get("extra_text_font_size", 42)))
         self.extra_text_opacity = tk.DoubleVar(value=float(self.cfg.get("extra_text_opacity", 0.65)))
+        self.subtitle_enabled = tk.BooleanVar(value=bool(self.cfg.get("subtitle_enabled", True)))
+        self.subtitle_position = tk.StringVar(value=str(self.cfg.get("subtitle_position", "Bottom Center")))
+        if self.subtitle_position.get() not in POSITIONS:
+            self.subtitle_position.set("Bottom Center")
+        self.subtitle_font_size = tk.IntVar(value=int(self.cfg.get("subtitle_font_size", 30)))
+        self.subtitle_margin = tk.IntVar(value=int(self.cfg.get("subtitle_margin", 42)))
         self.preview_time = tk.DoubleVar(value=float(self.cfg.get("preview_seek_seconds", 1.0)))
         self.preview_duration = 0.0
         self.blur_boxes: list[dict[str, float]] = []
@@ -497,6 +504,29 @@ class App(tk.Tk):
                                                "extra_opacity_label", f"{self.extra_text_opacity.get()*100:.0f}%", pady=(2, 2))
         self.extra_opacity_slider.bind("<ButtonRelease-1>", lambda _e: self._redraw_editor_items())
         ttk.Label(tools, text="Drag the text on the preview to move it", style="Muted.TLabel").grid(row=20, column=0, sticky="w", pady=(0, 10))
+        section(22, "Myanmar Subtitles (voice-synced)")
+        ttk.Checkbutton(tools, text="Burn subtitles into final MP4", variable=self.subtitle_enabled).grid(
+            row=23, column=0, sticky="w", pady=(5, 4)
+        )
+        subtitle_pos = ttk.Frame(tools)
+        subtitle_pos.grid(row=24, column=0, sticky="ew", pady=(2, 3))
+        subtitle_pos.columnconfigure(1, weight=1)
+        ttk.Label(subtitle_pos, text="Location", width=9).grid(row=0, column=0, sticky="w")
+        ttk.Combobox(subtitle_pos, textvariable=self.subtitle_position,
+                     values=tuple(POSITIONS.keys()), state="readonly").grid(row=0, column=1, sticky="ew")
+        subtitle_size = ttk.Frame(tools)
+        subtitle_size.grid(row=25, column=0, sticky="ew", pady=(2, 3))
+        subtitle_size.columnconfigure(1, weight=1)
+        ttk.Label(subtitle_size, text="Font size", width=9).grid(row=0, column=0, sticky="w")
+        ttk.Spinbox(subtitle_size, from_=10, to=96, textvariable=self.subtitle_font_size, width=7).grid(row=0, column=1, sticky="w")
+        subtitle_margin = ttk.Frame(tools)
+        subtitle_margin.grid(row=26, column=0, sticky="ew", pady=(2, 3))
+        subtitle_margin.columnconfigure(1, weight=1)
+        ttk.Label(subtitle_margin, text="Margin", width=9).grid(row=0, column=0, sticky="w")
+        ttk.Spinbox(subtitle_margin, from_=0, to=500, textvariable=self.subtitle_margin, width=7).grid(row=0, column=1, sticky="w")
+        ttk.Label(tools, text="SRT ကို job folder ထဲမှာ subtitles_myanmar.srt အဖြစ်လည်း သိမ်းပေးမယ်", style="Muted.TLabel").grid(
+            row=27, column=0, sticky="w", pady=(2, 10)
+        )
         self._bind_wheel_recursive(tools, tools_canvas)
         # Job resume / config loads set the IntVars directly; keep the sliders in step.
         self.title_size.trace_add("write", lambda *_a: self._sync_int_slider(self.title_size, self._title_size_scale_var, "title_size_label"))
@@ -1037,6 +1067,11 @@ class App(tk.Tk):
                     self.extra_text_pos = list(ed.get("extra_text_position") or self.extra_text_pos)
                     self.extra_text_size.set(int(ed.get("extra_text_font_size", self.extra_text_size.get())))
                     self.extra_text_opacity.set(float(ed.get("extra_text_opacity", self.extra_text_opacity.get())))
+                    self.subtitle_enabled.set(bool(ed.get("subtitle_enabled", self.subtitle_enabled.get())))
+                    position = str(ed.get("subtitle_position", self.subtitle_position.get()))
+                    self.subtitle_position.set(position if position in POSITIONS else "Bottom Center")
+                    self.subtitle_font_size.set(int(ed.get("subtitle_font_size", self.subtitle_font_size.get())))
+                    self.subtitle_margin.set(int(ed.get("subtitle_margin", self.subtitle_margin.get())))
                 except Exception as exc:
                     self._log(f"⚠️ Editor layout resume error: {exc}")
             self.job_display.set(f"Job: {job.name}")
@@ -1076,6 +1111,10 @@ class App(tk.Tk):
         self.cfg["extra_text_position"] = settings["overlays"].get("extra_text_position", [0.50, 0.84])
         self.cfg["extra_text_font_size"] = settings["overlays"].get("extra_text_font_size", 42)
         self.cfg["extra_text_opacity"] = settings["overlays"].get("extra_text_opacity", 0.65)
+        self.cfg["subtitle_enabled"] = bool(settings["overlays"].get("subtitle_enabled", True))
+        self.cfg["subtitle_position"] = settings["overlays"].get("subtitle_position", "Bottom Center")
+        self.cfg["subtitle_font_size"] = settings["overlays"].get("subtitle_font_size", 30)
+        self.cfg["subtitle_margin"] = settings["overlays"].get("subtitle_margin", 42)
         self.cfg["preview_seek_seconds"] = float(self.preview_time.get())
         save_config(self.cfg)
 
@@ -1123,6 +1162,10 @@ class App(tk.Tk):
             "extra_text_position": [float(self.extra_text_pos[0]), float(self.extra_text_pos[1])],
             "extra_text_font_size": int(self.extra_text_size.get()),
             "extra_text_opacity": float(self.extra_text_opacity.get()),
+            "subtitle_enabled": bool(self.subtitle_enabled.get()),
+            "subtitle_position": self.subtitle_position.get() if self.subtitle_position.get() in POSITIONS else "Bottom Center",
+            "subtitle_font_size": max(10, min(96, int(self.subtitle_font_size.get()))),
+            "subtitle_margin": max(0, min(500, int(self.subtitle_margin.get()))),
         }
         if overlays["logo_path"] and not Path(overlays["logo_path"]).is_file():
             raise ValueError("Logo image path မမှန်ပါ။")

@@ -924,13 +924,15 @@ def apply_production_overlays(
         h = int(round(_clamp01(b.get("h"), 0.1) * fh))
         w = max(8, min(w, fw - x)); h = max(8, min(h, fh - y))
         base = f"bbase{i}"; crop = f"bcrop{i}"; blur = f"bblur{i}"; out = f"bv{i}"
+        opacity = max(0.0, min(1.0, float(overlays.get("blur_opacity", 1.0))))
         graph.append(f"{current}split=2[{base}][{crop}]")
         graph.append(
             f"[{crop}]crop={w}:{h}:{x}:{y},"
             f"boxblur=luma_radius={blur_strength}:luma_power=2:"
-            f"chroma_radius={chroma_blur_strength}:chroma_power=1[{blur}]"
+            f"chroma_radius={chroma_blur_strength}:chroma_power=1,format=rgba,"
+            f"colorchannelmixer=aa={opacity:.3f}[{blur}]"
         )
-        graph.append(f"[{base}][{blur}]overlay={x}:{y}[{out}]")
+        graph.append(f"[{base}][{blur}]overlay={x}:{y}:format=auto[{out}]")
         current = f"[{out}]"
 
     if title_idx is not None and title_file is not None:

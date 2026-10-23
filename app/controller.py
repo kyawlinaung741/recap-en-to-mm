@@ -1057,6 +1057,8 @@ class App(tk.Tk):
             else:
                 b["w"]=max(0.015,min(1.0-old["x"],old["w"]+dx)); b["h"]=max(0.015,min(1.0-old["y"],old["h"]+dy))
             self.blur_boxes[i]=b
+            if self._drag_kind == "blur_resize":
+                self._sync_blur_size_controls()
         self._redraw_editor_items()
 
     def _preview_release(self, event) -> None:

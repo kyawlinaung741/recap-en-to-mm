@@ -196,6 +196,10 @@ class App(tk.Tk):
         self.preview_duration = 0.0
         self.blur_boxes: list[dict[str, float]] = []
         self.selected_blur: int | None = None
+        self.blur_width_percent = tk.DoubleVar(value=20.0)
+        self.blur_height_percent = tk.DoubleVar(value=10.0)
+        self.blur_opacity_percent = tk.DoubleVar(value=float(self.cfg.get("blur_opacity_percent", 100)))
+        self._updating_blur_controls = False
         self.title_pos = list(self.cfg.get("title_position", [0.50, 0.12]))
         self.logo_pos = list(self.cfg.get("logo_position", [0.80, 0.06]))
         self.extra_text_pos = list(self.cfg.get("extra_text_position", [0.50, 0.84]))
@@ -468,6 +472,22 @@ class App(tk.Tk):
         ttk.Button(blur_row, text="Delete Selected", style="Compact.TButton", command=self._delete_selected_blur).pack(side="left", padx=6)
         self.blur_count_label = ttk.Label(blur_row, text="0 box", style="Muted.TLabel")
         self.blur_count_label.pack(side="left", padx=(4, 0))
+        blur_settings = ttk.Frame(tools)
+        blur_settings.grid(row=5, column=0, sticky="ew", pady=(0, 8))
+        blur_settings.columnconfigure(0, weight=1)
+        self._blur_width_label = ttk.Label(blur_settings, text="Width 20%", style="Muted.TLabel")
+        self._blur_width_label.grid(row=0, column=0, sticky="w")
+        ttk.Scale(blur_settings, from_=2, to=100, variable=self.blur_width_percent,
+                  command=self._blur_size_changed).grid(row=1, column=0, sticky="ew")
+        self._blur_height_label = ttk.Label(blur_settings, text="Height 10%", style="Muted.TLabel")
+        self._blur_height_label.grid(row=2, column=0, sticky="w")
+        ttk.Scale(blur_settings, from_=2, to=60, variable=self.blur_height_percent,
+                  command=self._blur_size_changed).grid(row=3, column=0, sticky="ew")
+        self._blur_opacity_label = ttk.Label(
+            blur_settings, text=f"Blur opacity {int(self.blur_opacity_percent.get())}%", style="Muted.TLabel")
+        self._blur_opacity_label.grid(row=4, column=0, sticky="w")
+        ttk.Scale(blur_settings, from_=0, to=100, variable=self.blur_opacity_percent,
+                  command=self._blur_opacity_changed).grid(row=5, column=0, sticky="ew")
 
         section(6, "Title")
         self.title_entry = ttk.Entry(tools, textvariable=self.title_text, font=("Myanmar Text", 10))
@@ -797,6 +817,41 @@ class App(tk.Tk):
         self.selected_blur = None
         self._redraw_editor_items()
 
+    def _sync_blur_size_controls(self) -> None:
+        self._updating_blur_controls = True
+        try:
+            if self.selected_blur is not None and 0 <= self.selected_blur < len(self.blur_boxes):
+                box = self.blur_boxes[self.selected_blur]
+                self.blur_width_percent.set(round(float(box.get("w", 0.2)) * 100, 1))
+                self.blur_height_percent.set(round(float(box.get("h", 0.1)) * 100, 1))
+            self._blur_width_label.configure(text=f"Width {self.blur_width_percent.get():.0f}%")
+            self._blur_height_label.configure(text=f"Height {self.blur_height_percent.get():.0f}%")
+            self._blur_opacity_label.configure(text=f"Blur opacity {self.blur_opacity_percent.get():.0f}%")
+        finally:
+            self._updating_blur_controls = False
+
+    def _blur_size_changed(self, _value=None) -> None:
+        self._blur_width_label.configure(text=f"Width {self.blur_width_percent.get():.0f}%")
+        self._blur_height_label.configure(text=f"Height {self.blur_height_percent.get():.0f}%")
+        if self._updating_blur_controls or self.selected_blur is None:
+            return
+        if not 0 <= self.selected_blur < len(self.blur_boxes):
+            return
+        box = dict(self.blur_boxes[self.selected_blur])
+        cx = float(box["x"]) + float(box["w"]) / 2
+        cy = float(box["y"]) + float(box["h"]) / 2
+        w = max(0.02, min(float(self.blur_width_percent.get()) / 100, 1.0))
+        h = max(0.02, min(float(self.blur_height_percent.get()) / 100, 1.0))
+        box["w"] = w
+        box["h"] = h
+        box["x"] = max(0.0, min(1.0 - w, cx - w / 2))
+        box["y"] = max(0.0, min(1.0 - h, cy - h / 2))
+        self.blur_boxes[self.selected_blur] = box
+        self._redraw_editor_items()
+
+    def _blur_opacity_changed(self, _value=None) -> None:
+        self._blur_opacity_label.configure(text=f"Blur opacity {self.blur_opacity_percent.get():.0f}%")
+
     def _fill_code(self) -> str:
         return next((code for code, label in FILL_LABELS.items() if label == self.frame_fill.get()), "blur")
 
@@ -967,6 +1022,7 @@ class App(tk.Tk):
                 self._drag_kind="logo"; self._drag_original=list(self.logo_pos); break
             if blur:
                 i=int(blur.rsplit("_",1)[1]); self.selected_blur=i; self._drag_kind="blur_move"; self._drag_index=i; self._drag_original=dict(self.blur_boxes[i]); break
+        self._sync_blur_size_controls()
         self._redraw_editor_items()
 
     def _preview_motion(self, event) -> None:
@@ -1012,6 +1068,7 @@ class App(tk.Tk):
                 xa,xb=sorted((x1,x2)); ya,yb=sorted((y1,y2))
                 self.blur_boxes.append({"x":(xa-ox)/pw,"y":(ya-oy)/ph,"w":(xb-xa)/pw,"h":(yb-ya)/ph})
                 self.selected_blur=len(self.blur_boxes)-1
+                self._sync_blur_size_controls()
             self._draw_blur_mode=False; self._draw_start=None; self._temp_rect=None
             self.preview_canvas.configure(cursor="arrow")
             self.status.set("READY")
@@ -1245,6 +1302,7 @@ class App(tk.Tk):
         overlays = {
             "blur_boxes": [dict(x) for x in self.blur_boxes],
             "blur_strength": int(self.cfg.get("overlay_blur_strength", 18)),
+            "blur_opacity": max(0.0, min(1.0, float(self.blur_opacity_percent.get()) / 100.0)),
             "title_text": self.title_text.get().strip(),
             "title_position": [float(self.title_pos[0]), float(self.title_pos[1])],
             "title_font_size": int(self.title_size.get()),

@@ -975,13 +975,21 @@ def apply_production_overlays(
     cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]", "-an"] + _encoder_args(encoder) + ["-movflags", "+faststart", str(output_video)]
     p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if p.returncode != 0 and encoder == "h264_nvenc":
-        log("⚠️ Overlay NVENC failed — libx264 fallback")
+        # The blur/overlay filters above are software filters; NVENC accelerates
+        # video encoding only. Log FFmpeg's actual NVENC error so an unsupported
+        # driver/API mismatch is distinguishable from a bad filter graph.
+        nvenc_error = (p.stderr or "").strip()
+        log("⚠️ Production overlay: NVIDIA NVENC encode failed; trying CPU libx264 fallback.")
+        if nvenc_error:
+            log("NVENC detail: " + nvenc_error[-1800:].replace("\\r", " ").replace("\\n", " | "))
         cmd2 = cmd[:]
         # Rebuild tail safely rather than trying to mutate codec options in-place.
         map_pos = cmd2.index("-map")
         prefix = cmd2[:map_pos] + ["-map", "[vout]", "-an"]
         cmd2 = prefix + _encoder_args("libx264") + ["-movflags", "+faststart", str(output_video)]
         p = subprocess.run(cmd2, capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if p.returncode == 0:
+            log("ℹ️ Production overlay completed with CPU libx264. For GPU encoding, use an FFmpeg build whose NVENC API is compatible with this GPU/driver.")
     if p.returncode != 0 or not output_video.is_file() or output_video.stat().st_size < 5000:
         raise RuntimeError("Production overlay render failed: " + p.stderr[-3000:])
     return output_video

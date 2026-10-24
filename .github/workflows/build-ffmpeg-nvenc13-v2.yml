@@ -27,6 +27,7 @@ jobs:
             nasm
             yasm
             diffutils
+            p7zip
             mingw-w64-ucrt-x86_64-toolchain
             mingw-w64-ucrt-x86_64-pkgconf
 

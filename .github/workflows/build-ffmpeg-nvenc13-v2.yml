@@ -51,6 +51,11 @@ jobs:
             --enable-cross-compile \
             --cross-prefix=x86_64-w64-mingw32- \
             --cc=x86_64-w64-mingw32-gcc \
+            --ar=ar \
+            --ranlib=ranlib \
+            --nm=nm \
+            --strip=strip \
+            --windres=windres \
             --pkg-config=pkg-config \
             --enable-gpl \
             --enable-version3 \

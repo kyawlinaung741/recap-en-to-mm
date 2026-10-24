@@ -14,12 +14,7 @@ _FONT_DIRS = [Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts",
 
 
 def _scan() -> dict[str, list[str]]:
-    # FontTools is listed in requirements.txt, but a missing package should not
-    # prevent the whole app from opening. In that case, use the saved/default font.
-    try:
-        from fontTools.ttLib import TTCollection, TTFont
-    except ImportError:
-        return {}
+    from fontTools.ttLib import TTCollection, TTFont
 
     families: dict[str, list[str]] = {}
     for directory in _FONT_DIRS:

@@ -1036,7 +1036,8 @@ def apply_production_overlays(
         total_duration = 0.0
         if ffmpeg.lower().endswith("ffmpeg.exe"):
             try:
-                total_duration = max(0.001, probe_duration(ffmpeg.replace("ffmpeg.exe", "ffprobe.exe"), input_video))
+                ffprobe_path = str(Path(ffmpeg).with_name("ffprobe.exe"))
+                total_duration = max(0.001, probe_duration(ffprobe_path, input_video))
             except Exception as exc:
                 # Progress reporting must never prevent the actual overlay render.
                 log(f"⚠️ Overlay duration probe unavailable; continuing with elapsed-time logs: {exc}")

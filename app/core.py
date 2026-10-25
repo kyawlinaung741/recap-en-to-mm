@@ -538,6 +538,10 @@ _X264_ARGS = {"1080": ["-preset", "medium", "-crf", "18"], "720": ["-preset", "v
 _NVENC_ARGS = {"1080": ["-preset", "p5", "-rc", "vbr", "-cq", "19", "-b:v", "0"],
                "720": ["-preset", "p4", "-rc", "vbr", "-cq", "21", "-b:v", "0"],
                "480": ["-preset", "p3", "-rc", "vbr", "-cq", "24", "-b:v", "0"]}
+_QSV_ARGS = {"1080": ["-preset", "medium", "-global_quality", "23"],
+             "720": ["-preset", "faster", "-global_quality", "25"],
+             "480": ["-preset", "veryfast", "-global_quality", "28"]}
+_HARDWARE_ENCODERS = {"h264_qsv", "h264_nvenc"}
 
 
 def video_quality(value: Any) -> str:
@@ -885,6 +889,8 @@ def _render_extra_text_png(
 
 def _encoder_args(encoder: str, quality: str = "1080") -> list[str]:
     q = video_quality(quality)
+    if encoder == "h264_qsv":
+        return ["-c:v", "h264_qsv", *_QSV_ARGS[q]]
     if encoder == "h264_nvenc":
         return ["-c:v", "h264_nvenc", *_NVENC_ARGS[q]]
     return ["-c:v", "libx264", *_X264_ARGS[q]]
@@ -1021,8 +1027,8 @@ def apply_production_overlays(
     graph.append(f"{current}format=yuv420p[vout]")
     cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]", "-an"] + _encoder_args(encoder, quality) + ["-movflags", "+faststart", str(output_video)]
     p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if p.returncode != 0 and encoder == "h264_nvenc":
-        log("⚠️ Overlay NVENC failed — libx264 fallback")
+    if p.returncode != 0 and encoder in _HARDWARE_ENCODERS:
+        log(f"⚠️ Overlay {encoder} failed — libx264 CPU fallback")
         cmd2 = cmd[:]
         # Rebuild tail safely rather than trying to mutate codec options in-place.
         map_pos = cmd2.index("-map")
@@ -1332,9 +1338,10 @@ class EdgeSmartSync:
 
         self.log("🎬 Smart Sync video parts render စမယ်...")
         encoders = ffmpeg_encoders(self.ffmpeg)
-        preferred = "h264_nvenc" if "h264_nvenc" in encoders else "libx264"
+        # Prefer Intel Quick Sync on this branch: it is verified working on the user's UHD 630.
+        preferred = next((name for name in ("h264_qsv", "h264_nvenc", "libx264") if name in encoders), "libx264")
         remembered = str(checkpoint.get("selected_encoder") or "")
-        encoder = remembered if remembered in {"h264_nvenc", "libx264"} else preferred
+        encoder = remembered if remembered in {"h264_qsv", "h264_nvenc", "libx264"} and remembered in encoders else preferred
         video_parts: list[Path] = []
         # Cumulative frame lock: each part gets round(audio_end*30) - frames_so_far
         # frames, so video never drifts more than half a frame from the narration.
@@ -1380,9 +1387,9 @@ class EdgeSmartSync:
                         frame_count=frame_count, layout=layout, quality=self.video_quality,
                     )
                 except Exception:
-                    # Only on the first non-reused part, allow global NVENC -> CPU fallback.
-                    if encoder == "h264_nvenc" and not video_parts:
-                        self.log("⚠️ NVENC မရပါ — libx264 CPU encoder ကို fallback လုပ်မယ်။")
+                    # If a hardware encoder fails on the first new part, fall back globally to CPU.
+                    if encoder in _HARDWARE_ENCODERS and not video_parts:
+                        self.log(f"⚠️ {encoder} မရပါ — libx264 CPU encoder ကို fallback လုပ်မယ်။")
                         encoder = "libx264"
                         # Encoder changed, invalidate any video checkpoint rows to avoid mixed codecs.
                         checkpoint["video"] = {}

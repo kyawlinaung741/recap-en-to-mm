@@ -1342,6 +1342,12 @@ class EdgeSmartSync:
         preferred = next((name for name in ("h264_qsv", "h264_nvenc", "libx264") if name in encoders), "libx264")
         remembered = str(checkpoint.get("selected_encoder") or "")
         encoder = remembered if remembered in {"h264_qsv", "h264_nvenc", "libx264"} and remembered in encoders else preferred
+        encoder_label = {
+            "h264_qsv": "Intel Quick Sync Video (QSV)",
+            "h264_nvenc": "NVIDIA NVENC",
+            "libx264": "CPU / libx264",
+        }.get(encoder, encoder)
+        self.log(f"🎛️ Video encoder selected: {encoder} — {encoder_label}")
         video_parts: list[Path] = []
         # Cumulative frame lock: each part gets round(audio_end*30) - frames_so_far
         # frames, so video never drifts more than half a frame from the narration.
@@ -1377,7 +1383,7 @@ class EdgeSmartSync:
                 self.log(f"♻️ VIDEO [{idx}/{len(segments)}] {base}.mp4 reuse")
             else:
                 self.progress(idx - 1, len(segments), f"Smart Sync video {idx}/{len(segments)}")
-                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s")
+                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | encoder={encoder}")
                 try:
                     metrics = render_video_part(
                         self.ffmpeg, source, dst, seg, target, encoder,

@@ -1025,18 +1025,73 @@ def apply_production_overlays(
                      "eof_action=repeat:format=auto[vsubtitle]")
         current = "[vsubtitle]"
     graph.append(f"{current}format=yuv420p[vout]")
-    cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]", "-an"] + _encoder_args(encoder, quality) + ["-movflags", "+faststart", str(output_video)]
-    p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if p.returncode != 0 and encoder in _HARDWARE_ENCODERS:
+    cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]", "-an"] + _encoder_args(encoder, quality) + ["-progress", "pipe:1", "-nostats", "-movflags", "+faststart", str(output_video)]
+
+    # Stream FFmpeg's machine-readable progress so long blur/overlay renders are
+    # visible in the app log instead of appearing frozen until subprocess.run ends.
+    import tempfile
+    import time as _time
+
+    def run_overlay_with_progress(run_cmd: list[str], run_encoder: str) -> tuple[int, str]:
+        total_duration = max(0.001, probe_duration(ffmpeg.replace("ffmpeg.exe", "ffprobe.exe"), input_video)) if ffmpeg.lower().endswith("ffmpeg.exe") else 0.0
+        if total_duration <= 0:
+            total_duration = 0.0
+        started = _time.monotonic()
+        last_logged_percent = -5
+        last_logged_at = started
+        last_out_seconds = 0.0
+        log(f"🎨 Overlay render started | encoder={run_encoder} | filters={len(graph)} | size={fw}x{fh} | input={input_video.name}")
+        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as err_file:
+            proc = subprocess.Popen(
+                run_cmd, stdout=subprocess.PIPE, stderr=err_file,
+                text=True, encoding="utf-8", errors="replace", bufsize=1,
+            )
+            if proc.stdout is not None:
+                for raw_line in proc.stdout:
+                    line = raw_line.strip()
+                    if "=" not in line:
+                        continue
+                    key, value = line.split("=", 1)
+                    if key == "out_time_ms":
+                        try:
+                            last_out_seconds = max(0.0, int(value) / 1_000_000.0)
+                        except ValueError:
+                            pass
+                    elif key == "progress":
+                        now = _time.monotonic()
+                        elapsed = now - started
+                        if total_duration > 0:
+                            percent = min(100, int(last_out_seconds * 100 / total_duration))
+                            if percent >= last_logged_percent + 5 or now - last_logged_at >= 10:
+                                speed = last_out_seconds / elapsed if elapsed > 0 else 0.0
+                                log(f"🎨 Overlay progress {percent:3d}% | {last_out_seconds:.1f}/{total_duration:.1f}s | elapsed={elapsed:.0f}s | speed={speed:.2f}x | encoder={run_encoder}")
+                                last_logged_percent = percent
+                                last_logged_at = now
+                        elif now - last_logged_at >= 10:
+                            log(f"🎨 Overlay still running | elapsed={elapsed:.0f}s | processed={last_out_seconds:.1f}s | encoder={run_encoder}")
+                            last_logged_at = now
+            return_code = proc.wait()
+            err_file.seek(0)
+            stderr_text = err_file.read()
+        elapsed = _time.monotonic() - started
+        if return_code == 0:
+            log(f"✅ Overlay render process ended | elapsed={elapsed:.1f}s | processed={last_out_seconds:.1f}s | encoder={run_encoder}")
+        else:
+            log(f"❌ Overlay render process failed | exit={return_code} | elapsed={elapsed:.1f}s | encoder={run_encoder}")
+        return return_code, stderr_text
+
+    return_code, stderr_text = run_overlay_with_progress(cmd, encoder)
+    if return_code != 0 and encoder in _HARDWARE_ENCODERS:
         log(f"⚠️ Overlay {encoder} failed — libx264 CPU fallback")
         cmd2 = cmd[:]
         # Rebuild tail safely rather than trying to mutate codec options in-place.
         map_pos = cmd2.index("-map")
         prefix = cmd2[:map_pos] + ["-map", "[vout]", "-an"]
-        cmd2 = prefix + _encoder_args("libx264", quality) + ["-movflags", "+faststart", str(output_video)]
-        p = subprocess.run(cmd2, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    if p.returncode != 0 or not output_video.is_file() or output_video.stat().st_size < 5000:
-        raise RuntimeError("Production overlay render failed: " + p.stderr[-3000:])
+        cmd2 = prefix + _encoder_args("libx264", quality) + ["-progress", "pipe:1", "-nostats", "-movflags", "+faststart", str(output_video)]
+        return_code, stderr_text = run_overlay_with_progress(cmd2, "libx264")
+    if return_code != 0 or not output_video.is_file() or output_video.stat().st_size < 5000:
+        raise RuntimeError("Production overlay render failed: " + stderr_text[-3000:])
+    log(f"🎨 Overlay output ready | {output_video.name} | {output_video.stat().st_size / (1024 * 1024):.1f} MiB")
     return output_video
 
 

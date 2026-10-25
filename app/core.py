@@ -1033,9 +1033,13 @@ def apply_production_overlays(
     import time as _time
 
     def run_overlay_with_progress(run_cmd: list[str], run_encoder: str) -> tuple[int, str]:
-        total_duration = max(0.001, probe_duration(ffmpeg.replace("ffmpeg.exe", "ffprobe.exe"), input_video)) if ffmpeg.lower().endswith("ffmpeg.exe") else 0.0
-        if total_duration <= 0:
-            total_duration = 0.0
+        total_duration = 0.0
+        if ffmpeg.lower().endswith("ffmpeg.exe"):
+            try:
+                total_duration = max(0.001, probe_duration(ffmpeg.replace("ffmpeg.exe", "ffprobe.exe"), input_video))
+            except Exception as exc:
+                # Progress reporting must never prevent the actual overlay render.
+                log(f"⚠️ Overlay duration probe unavailable; continuing with elapsed-time logs: {exc}")
         started = _time.monotonic()
         last_logged_percent = -5
         last_logged_at = started

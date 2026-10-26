@@ -205,8 +205,10 @@ class WhisperTimestampService:
             return False
 
         try:
-            print(f"🧠 Loading openai-whisper: model={self.model_size}, device={self.device}")
-            self._model = whisper.load_model(self.model_size, device=self.device)
+            resolved_device = self._resolve_device()
+            print(f"🧠 Loading openai-whisper: model={self.model_size}, device={resolved_device}")
+            self._model = whisper.load_model(self.model_size, device=resolved_device)
+            self.device = resolved_device
             self._active_backend = "openai-whisper"
             return True
         except Exception as exc:

@@ -4,6 +4,7 @@ import os
 import shutil
 import subprocess
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any, Optional
 
@@ -34,13 +35,22 @@ class WhisperTimestampService:
         compute_type: Optional[str] = None,
         language: Optional[str] = None,
     ) -> None:
-        self.model_size = model_size or os.getenv("WHISPER_MODEL", "medium")
+        requested_model = model_size or os.getenv("WHISPER_MODEL", "medium")
+        self._auto_model = str(requested_model).lower() == "auto"
+        self.model_size = "medium" if self._auto_model else requested_model
         self.backend = (backend or os.getenv("WHISPER_BACKEND", "auto")).lower()
         self.device = (device or os.getenv("WHISPER_DEVICE", "auto")).lower()
         self.compute_type = (compute_type or os.getenv("WHISPER_COMPUTE_TYPE", "auto")).lower()
         self.language = language or os.getenv("WHISPER_LANGUAGE") or None
+        self.batch_setting = os.getenv("WHISPER_BATCH_SIZE", "off").strip().lower()
+        self.fast_mode = os.getenv("WHISPER_FAST_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
+        self.detection_seconds = max(30, min(300, int(os.getenv("WHISPER_DETECTION_SECONDS", "180"))))
         self._model: Any = None
         self._active_backend: Optional[str] = None
+        self._batched_pipeline: Any = None
+        if self._auto_model and self.language:
+            self.model_size = "small.en" if self.language.lower().startswith("en") else "medium"
+            print(f"🧭 Whisper auto model: language={self.language}, model={self.model_size}")
 
     def _download_model_once(self) -> None:
         """First run on a PC: the model (~460 MB for small.en, ~1.5 GB for medium) comes from huggingface.co.
@@ -76,7 +86,7 @@ class WhisperTimestampService:
         done = threading.Event()
 
         def report() -> None:
-            while not done.wait(5.0):
+            while not done.wait(15.0):
                 files = (folder / "blobs") if (folder / "blobs").is_dir() else folder
                 size = sum(f.stat().st_size for f in files.rglob("*") if f.is_file()) if files.is_dir() else 0
                 print(f"⬇️ Whisper model: {size / 1_000_000:.0f} MB downloaded...", flush=True)
@@ -247,12 +257,15 @@ class WhisperTimestampService:
     def detect_language(self, media_path: str) -> tuple[str, float]:
         """Which language the speech in media_path is in: (Whisper code such as "en", "zh", "hi", probability).
         Needs a multilingual model (not a ".en" one); music and silence are skipped (VAD), up to 8 pieces of 30 s."""
+        # Auto mode always detects language with multilingual weights first.
+        if self._auto_model and str(self.model_size).endswith(".en"):
+            self.model_size = "medium"
+            self._model = None
+            self._batched_pipeline = None
         self._ensure_model()
         if self._active_backend != "faster-whisper":
             raise RuntimeError("Language detection needs faster-whisper")
-        from faster_whisper import decode_audio
-
-        audio = decode_audio(str(media_path), sampling_rate=16000)
+        audio = self._decode_detection_audio(str(media_path))
         try:
             language, probability, _all = self._model.detect_language(
                 audio=audio, vad_filter=True, language_detection_segments=8)
@@ -266,7 +279,55 @@ class WhisperTimestampService:
             self._ensure_model()
             language, probability, _all = self._model.detect_language(
                 audio=audio, vad_filter=True, language_detection_segments=8)
-        return str(language), float(probability)
+        language = str(language)
+        probability = float(probability)
+        if self._auto_model:
+            selected_model = "small.en" if language.lower().startswith("en") else "medium"
+            if selected_model != self.model_size:
+                print(f"🧭 Whisper auto model: detected language={language} ({probability:.2f}); selecting {selected_model}")
+                self.model_size = selected_model
+                self._model = None
+                self._batched_pipeline = None
+        return language, probability
+
+    def _decode_detection_audio(self, media_path: str):
+        """Decode only a short opening clip to reduce language-detection startup RAM."""
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg:
+            try:
+                result = subprocess.run(
+                    [ffmpeg, "-nostdin", "-v", "error", "-i", media_path,
+                     "-t", str(self.detection_seconds), "-vn", "-ac", "1", "-ar", "16000",
+                     "-f", "f32le", "pipe:1"],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    timeout=max(60, self.detection_seconds * 2), check=False,
+                )
+                if result.returncode == 0 and result.stdout:
+                    import numpy as np
+                    audio = np.frombuffer(result.stdout, dtype=np.float32)
+                    if audio.size:
+                        print(f"🔎 Language detection uses up to {min(self.detection_seconds, len(audio) / 16000):.0f}s of audio")
+                        return audio
+                print("⚠️ Short audio decode failed; falling back to full decode")
+            except Exception as exc:
+                print(f"⚠️ Short audio decode failed ({exc}); falling back to full decode")
+        from faster_whisper import decode_audio
+        return decode_audio(media_path, sampling_rate=16000)
+
+    def _resolve_batch_size(self) -> int:
+        """Resolve experimental batch setting; standard inference remains the default."""
+        setting = self.batch_setting
+        if setting in {"", "off", "0", "false", "none"}:
+            return 1
+        if setting == "auto":
+            if self.device != "cuda":
+                return 1
+            return 8 if "gtx" in self._nvidia_gpu_name().lower() else 16
+        try:
+            return max(1, min(32, int(setting)))
+        except ValueError:
+            print(f"⚠️ Invalid WHISPER_BATCH_SIZE={setting!r}; using standard inference")
+            return 1
 
     @staticmethod
     def _clean_text(text: str) -> str:
@@ -286,7 +347,7 @@ class WhisperTimestampService:
             "beam_size": 1,
             "best_of": 1,
             "vad_filter": bool(vad_filter),
-            "word_timestamps": True,
+            "word_timestamps": not self.fast_mode,
             "condition_on_previous_text": False,
             "temperature": 0.0,
         }
@@ -300,27 +361,39 @@ class WhisperTimestampService:
             kwargs["beam_size"] = 5
             kwargs["temperature"] = (0.0, 0.2, 0.4, 0.6, 0.8)
 
-        segments_iter, info = self._model.transcribe(media_path, **kwargs)
+        batch_size = self._resolve_batch_size()
+        if batch_size > 1 and self._active_backend == "faster-whisper":
+            try:
+                from faster_whisper import BatchedInferencePipeline
+                if self._batched_pipeline is None:
+                    self._batched_pipeline = BatchedInferencePipeline(model=self._model)
+                print(f"⚡ Experimental batch inference: batch_size={batch_size}")
+                segments_iter, info = self._batched_pipeline.transcribe(media_path, batch_size=batch_size, **kwargs)
+            except Exception as exc:
+                print(f"⚠️ Batch pipeline setup failed ({exc}); using standard inference")
+                self._batched_pipeline = None
+                segments_iter, info = self._model.transcribe(media_path, **kwargs)
+        else:
+            segments_iter, info = self._model.transcribe(media_path, **kwargs)
         segments: list[dict[str, Any]] = []
         words_total = 0
         avg_logprob_values: list[float] = []
         no_speech_values: list[float] = []
         compression_ratio_values: list[float] = []
-        next_progress = 5
+        last_progress_time = time.monotonic()
         total_duration = float(media_duration or 0.0)
         for idx, seg in enumerate(segments_iter):
             text = self._clean_text(getattr(seg, "text", ""))
             start = float(getattr(seg, "start", 0.0) or 0.0)
             end = float(getattr(seg, "end", 0.0) or 0.0)
-            if total_duration > 0 and end > 0:
+            if total_duration > 0 and end > 0 and time.monotonic() - last_progress_time >= 5.0:
                 pct = min(99, int((end / total_duration) * 100))
-                if pct >= next_progress:
-                    print(
-                        f"⏳ Whisper {pct:02d}% | "
-                        f"{self._fmt_clock(end)} / {self._fmt_clock(total_duration)}",
-                        flush=True,
-                    )
-                    next_progress = ((pct // 5) + 1) * 5
+                print(
+                    f"⏳ Whisper {pct:02d}% | "
+                    f"{self._fmt_clock(end)} / {self._fmt_clock(total_duration)}",
+                    flush=True,
+                )
+                last_progress_time = time.monotonic()
             if not text or end <= start:
                 continue
             words = []
@@ -461,13 +534,12 @@ class WhisperTimestampService:
         """
         segments = result.get("segments") or []
         transcript = " ".join(str(seg.get("text") or "") for seg in segments).strip()
-        tokens = [
+        tokens = (
             token.strip(".,!?;:'\"()[]{}<>-_—–…").lower()
             for token in transcript.split()
-        ]
-        tokens = [token for token in tokens if token]
-        meaningful = [token for token in tokens if any(ch.isalnum() for ch in token)]
-        unique_ratio = (len(set(meaningful)) / len(meaningful)) if meaningful else 0.0
+        )
+        meaningful = [token for token in tokens if token and any(ch.isalnum() for ch in token)]
+        unique_ratio = (len(Counter(meaningful)) / len(meaningful)) if meaningful else 0.0
 
         spoken_seconds = 0.0
         for seg in segments:

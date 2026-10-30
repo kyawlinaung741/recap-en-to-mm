@@ -964,22 +964,25 @@ def apply_production_overlays(
     graph: list[str] = []
     current = "[0:v]"
     blur_strength = max(4, min(40, int(overlays.get("blur_strength", 18))))
-    # yuv420p chroma planes are half-resolution. Letting FFmpeg inherit the
-    # luma radius (for example 18) can exceed the chroma-plane limit (9) and
-    # fail only at the final production overlay pass after all parts are done.
-    chroma_blur_strength = min(9, blur_strength)
     for i, b in enumerate(boxes):
         x = min(fw - 8, int(round(_clamp01(b.get("x")) * fw)))
         y = min(fh - 8, int(round(_clamp01(b.get("y")) * fh)))
         w = int(round(_clamp01(b.get("w"), 0.1) * fw))
         h = int(round(_clamp01(b.get("h"), 0.1) * fh))
         w = max(8, min(w, fw - x)); h = max(8, min(h, fh - y))
+        # boxblur validates radius against the cropped frame dimensions.
+        # For yuv420p, chroma planes are half-size, so clamp each plane's
+        # radius independently. Radius must be strictly below half its size.
+        luma_limit = max(0, min(w, h) // 2 - 1)
+        chroma_limit = max(0, min(w, h) // 4 - 1)
+        luma_radius = min(blur_strength, luma_limit)
+        chroma_radius = min(blur_strength, chroma_limit)
         base = f"bbase{i}"; crop = f"bcrop{i}"; blur = f"bblur{i}"; out = f"bv{i}"
         graph.append(f"{current}split=2[{base}][{crop}]")
         graph.append(
             f"[{crop}]crop={w}:{h}:{x}:{y},"
-            f"boxblur=luma_radius={blur_strength}:luma_power=2:"
-            f"chroma_radius={chroma_blur_strength}:chroma_power=1[{blur}]"
+            f"boxblur=luma_radius={luma_radius}:luma_power=2:"
+            f"chroma_radius={chroma_radius}:chroma_power=1[{blur}]"
         )
         graph.append(f"[{base}][{blur}]overlay={x}:{y}[{out}]")
         current = f"[{out}]"

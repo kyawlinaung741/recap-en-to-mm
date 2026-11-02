@@ -797,9 +797,9 @@ def mux_audio(ffmpeg: str, ffprobe: str, video: Path, narration: Path, source_vi
         else:
             bg_filter += "[bg0]anull[bg];"
         filter_graph = (
-            "[1:a]volume={:.3f},alimiter=limit=0.95:level=disabled[narr];".format(narration_gain)
-            + bg_filter
-            + "[bg][narr]amix=inputs=2:duration=longest:dropout_transition=2,alimiter=limit=0.98[aout]"
+            "[1:a]volume={:.3f},alimiter=limit=0.95:level=disabled,asplit=2[narr_sc][narr_mix];".format(narration_gain)
+            + bg_filter.replace("[narr]", "[narr_sc]")
+            + "[bg][narr_mix]amix=inputs=2:duration=longest:dropout_transition=2,alimiter=limit=0.98[aout]"
         )
         cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
                "-i", str(video), "-i", str(narration), "-i", str(source_video),

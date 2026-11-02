@@ -458,16 +458,6 @@ class App(tk.Tk):
         self.zoom_slider.bind("<ButtonRelease-1>", lambda _e: self._refresh_preview())
         ttk.Checkbutton(self.zoom_slider.master, text="Flip (mirror left ↔ right)", variable=self.mirror_video,
                         command=self._mirror_changed).grid(row=1, column=0, columnspan=3, sticky="w", pady=(6, 0))
-        self._voice_volume_scale_var = tk.DoubleVar(value=float(self.voice_volume.get()))
-        volume_frame = ttk.Frame(self.zoom_slider.master)
-        volume_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(8, 0))
-        volume_frame.columnconfigure(1, weight=1)
-        ttk.Label(volume_frame, text="Voice vol", width=9).grid(row=0, column=0, sticky="w")
-        ttk.Scale(volume_frame, from_=50, to=300, orient="horizontal", variable=self._voice_volume_scale_var,
-                  command=self._voice_volume_changed).grid(row=0, column=1, sticky="ew")
-        self.voice_volume_label = ttk.Label(volume_frame, text="", width=13, anchor="e")
-        self.voice_volume_label.grid(row=0, column=2, padx=(8, 0))
-        self._voice_volume_changed(self.voice_volume.get())
         ttk.Checkbutton(self.zoom_slider.master, text="Short pauses (~0.25 s between lines)",
                         variable=self.short_pauses).grid(row=3, column=0, columnspan=3, sticky="w", pady=(6, 0))
         frame_row = ttk.Frame(self.zoom_slider.master)

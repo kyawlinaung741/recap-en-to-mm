@@ -168,6 +168,8 @@ class App(tk.Tk):
         self.max_slow = tk.StringVar(value=str(self.cfg.get("max_video_slow", 1.35)))
         self.mirror_video = tk.BooleanVar(value=bool(self.cfg.get("mirror_video", True)))
         self.voice_volume = tk.IntVar(value=int(self.cfg.get("voice_volume_percent", 100) or 100))
+        self.original_audio_volume = tk.IntVar(value=int(self.cfg.get("original_audio_volume_percent", 15)))
+        self.auto_duck = tk.BooleanVar(value=bool(self.cfg.get("auto_duck", True)))
         self.short_pauses = tk.BooleanVar(value=bool(self.cfg.get("short_pauses", True)))
         self.zoom_factor = tk.DoubleVar(value=float(self.cfg.get("zoom_factor", 1.05)))
         saved_ratio = str(self.cfg.get("output_ratio") or "16:9")
@@ -359,6 +361,25 @@ class App(tk.Tk):
         ttk.Label(source_box, text="Gemini voice style").grid(row=13, column=0, sticky="w", padx=(0, 8), pady=3)
         ttk.Entry(source_box, textvariable=self.gemini_direction).grid(row=13, column=1, sticky="ew", pady=3)
         hint(13, "Gemini only, e.g. calm storyteller — the voice itself never changes")
+
+        audio_box = ttk.LabelFrame(source_box, text="3 · Audio Settings", padding=8)
+        audio_box.grid(row=14, column=0, columnspan=3, sticky="ew", pady=(8, 4))
+        audio_box.columnconfigure(1, weight=1)
+        ttk.Label(audio_box, text="Original Audio").grid(row=0, column=0, sticky="w", padx=(0, 8), pady=4)
+        self.original_audio_scale = ttk.Scale(audio_box, from_=0, to=100, orient="horizontal",
+            variable=self.original_audio_volume, command=self._original_audio_changed)
+        self.original_audio_scale.grid(row=0, column=1, sticky="ew", pady=4)
+        self.original_audio_value = ttk.Label(audio_box, text=f"{self.original_audio_volume.get()}%", width=7, anchor="e")
+        self.original_audio_value.grid(row=0, column=2, padx=(8, 0))
+        ttk.Label(audio_box, text="Narration Volume").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
+        self.narration_audio_scale = ttk.Scale(audio_box, from_=0, to=300, orient="horizontal",
+            variable=self._voice_volume_scale_var if hasattr(self, "_voice_volume_scale_var") else self.voice_volume,
+            command=self._voice_volume_changed)
+        self.narration_audio_scale.grid(row=1, column=1, sticky="ew", pady=4)
+        self.narration_audio_value = ttk.Label(audio_box, text=f"{self.voice_volume.get()}%", width=7, anchor="e")
+        self.narration_audio_value.grid(row=1, column=2, padx=(8, 0))
+        ttk.Checkbutton(audio_box, text="Auto Duck — narration ပြောနေချိန် မူရင်းအသံကို အလိုအလျောက်လျှော့ရန်",
+                        variable=self.auto_duck).grid(row=2, column=0, columnspan=3, sticky="w", pady=(6, 2))
 
         self._bind_wheel_recursive(source_box, settings_canvas)
         self._settings_canvas = settings_canvas
@@ -1163,6 +1184,8 @@ class App(tk.Tk):
         self.cfg["zoom_factor"] = settings["zoom_factor"]
         self.cfg["mirror_video"] = bool(settings["mirror_video"])
         self.cfg["voice_volume_percent"] = int(settings.get("voice_volume_percent", 100))
+        self.cfg["original_audio_volume_percent"] = int(settings.get("original_audio_volume_percent", 15))
+        self.cfg["auto_duck"] = bool(settings.get("auto_duck", True))
         self.cfg["short_pauses"] = bool(settings.get("short_pauses", True))
         self.cfg["output_ratio"] = settings["output_ratio"]
         self.cfg["video_quality"] = settings["video_quality"]
@@ -1252,6 +1275,8 @@ class App(tk.Tk):
             "max_freeze_hold": float(self.cfg.get("max_freeze_hold", 0.75)),
             "mirror_video": bool(self.mirror_video.get()),
             "voice_volume_percent": int(self.voice_volume.get()),
+            "original_audio_volume_percent": int(self.original_audio_volume.get()),
+            "auto_duck": bool(self.auto_duck.get()),
             "short_pauses": bool(self.short_pauses.get()),
             "output_ratio": self.output_ratio.get() if self.output_ratio.get() in OUTPUT_RATIOS else "16:9",
             "video_quality": self._quality_code(),
@@ -1512,6 +1537,8 @@ class App(tk.Tk):
             "render_final_video": settings["render_final_video"],
             "overlays": settings["overlays"],
             "voice_volume_percent": settings["voice_volume_percent"],
+            "original_audio_volume_percent": settings["original_audio_volume_percent"],
+            "auto_duck": settings["auto_duck"],
             "short_pauses": bool(settings.get("short_pauses", True)),
             "output_ratio": settings.get("output_ratio", "16:9"),
             "video_quality": settings.get("video_quality", "1080"),

@@ -372,9 +372,8 @@ class App(tk.Tk):
         self.original_audio_value = ttk.Label(audio_box, text=f"{self.original_audio_volume.get()}%", width=7, anchor="e")
         self.original_audio_value.grid(row=0, column=2, padx=(8, 0))
         ttk.Label(audio_box, text="Narration Volume").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=4)
-        self.narration_audio_scale = ttk.Scale(audio_box, from_=0, to=300, orient="horizontal",
-            variable=self._voice_volume_scale_var if hasattr(self, "_voice_volume_scale_var") else self.voice_volume,
-            command=self._voice_volume_changed)
+        self.narration_audio_scale = ttk.Scale(audio_box, from_=50, to=300, orient="horizontal",
+            variable=self.voice_volume, command=self._voice_volume_changed)
         self.narration_audio_scale.grid(row=1, column=1, sticky="ew", pady=4)
         self.narration_audio_value = ttk.Label(audio_box, text=f"{self.voice_volume.get()}%", width=7, anchor="e")
         self.narration_audio_value.grid(row=1, column=2, padx=(8, 0))
@@ -639,7 +638,19 @@ class App(tk.Tk):
         import math
         percent = int(round(float(value) / 5.0) * 5)  # 5% steps
         self.voice_volume.set(percent)
-        self.voice_volume_label.configure(text=f"{percent}% ({20 * math.log10(percent / 100.0):+.1f}dB)")
+        label = f"{percent}% ({20 * math.log10(percent / 100.0):+.1f}dB)"
+        if hasattr(self, "voice_volume_label"):
+            self.voice_volume_label.configure(text=label)
+        if hasattr(self, "narration_audio_value"):
+            self.narration_audio_value.configure(text=f"{percent}%")
+        if hasattr(self, "_voice_volume_scale_var"):
+            self._voice_volume_scale_var.set(percent)
+
+    def _original_audio_changed(self, value) -> None:
+        percent = int(round(float(value) / 5.0) * 5)
+        self.original_audio_volume.set(percent)
+        if hasattr(self, "original_audio_value"):
+            self.original_audio_value.configure(text=f"{percent}%")
 
     def _mirror_changed(self) -> None:
         # Persist right away so the choice survives a restart even before START.

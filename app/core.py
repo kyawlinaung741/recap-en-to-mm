@@ -538,10 +538,6 @@ _X264_ARGS = {"1080": ["-preset", "medium", "-crf", "18"], "720": ["-preset", "v
 _NVENC_ARGS = {"1080": ["-preset", "p5", "-rc", "vbr", "-cq", "19", "-b:v", "0"],
                "720": ["-preset", "p4", "-rc", "vbr", "-cq", "21", "-b:v", "0"],
                "480": ["-preset", "p3", "-rc", "vbr", "-cq", "24", "-b:v", "0"]}
-_QSV_ARGS = {"1080": ["-preset", "medium", "-global_quality", "23"],
-             "720": ["-preset", "faster", "-global_quality", "25"],
-             "480": ["-preset", "veryfast", "-global_quality", "28"]}
-_HARDWARE_ENCODERS = {"h264_qsv", "h264_nvenc"}
 
 
 def video_quality(value: Any) -> str:
@@ -889,8 +885,6 @@ def _render_extra_text_png(
 
 def _encoder_args(encoder: str, quality: str = "1080") -> list[str]:
     q = video_quality(quality)
-    if encoder == "h264_qsv":
-        return ["-c:v", "h264_qsv", *_QSV_ARGS[q]]
     if encoder == "h264_nvenc":
         return ["-c:v", "h264_nvenc", *_NVENC_ARGS[q]]
     return ["-c:v", "libx264", *_X264_ARGS[q]]
@@ -964,25 +958,22 @@ def apply_production_overlays(
     graph: list[str] = []
     current = "[0:v]"
     blur_strength = max(4, min(40, int(overlays.get("blur_strength", 18))))
+    # yuv420p chroma planes are half-resolution. Letting FFmpeg inherit the
+    # luma radius (for example 18) can exceed the chroma-plane limit (9) and
+    # fail only at the final production overlay pass after all parts are done.
+    chroma_blur_strength = min(9, blur_strength)
     for i, b in enumerate(boxes):
         x = min(fw - 8, int(round(_clamp01(b.get("x")) * fw)))
         y = min(fh - 8, int(round(_clamp01(b.get("y")) * fh)))
         w = int(round(_clamp01(b.get("w"), 0.1) * fw))
         h = int(round(_clamp01(b.get("h"), 0.1) * fh))
         w = max(8, min(w, fw - x)); h = max(8, min(h, fh - y))
-        # boxblur validates radius against the cropped frame dimensions.
-        # For yuv420p, chroma planes are half-size, so clamp each plane's
-        # radius independently. Radius must be strictly below half its size.
-        luma_limit = max(0, min(w, h) // 2 - 1)
-        chroma_limit = max(0, min(w, h) // 4 - 1)
-        luma_radius = min(blur_strength, luma_limit)
-        chroma_radius = min(blur_strength, chroma_limit)
         base = f"bbase{i}"; crop = f"bcrop{i}"; blur = f"bblur{i}"; out = f"bv{i}"
         graph.append(f"{current}split=2[{base}][{crop}]")
         graph.append(
             f"[{crop}]crop={w}:{h}:{x}:{y},"
-            f"boxblur=luma_radius={luma_radius}:luma_power=2:"
-            f"chroma_radius={chroma_radius}:chroma_power=1[{blur}]"
+            f"boxblur=luma_radius={blur_strength}:luma_power=2:"
+            f"chroma_radius={chroma_blur_strength}:chroma_power=1[{blur}]"
         )
         graph.append(f"[{base}][{blur}]overlay={x}:{y}[{out}]")
         current = f"[{out}]"
@@ -1028,78 +1019,18 @@ def apply_production_overlays(
                      "eof_action=repeat:format=auto[vsubtitle]")
         current = "[vsubtitle]"
     graph.append(f"{current}format=yuv420p[vout]")
-    cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]", "-an"] + _encoder_args(encoder, quality) + ["-progress", "pipe:1", "-nostats", "-movflags", "+faststart", str(output_video)]
-
-    # Stream FFmpeg's machine-readable progress so long blur/overlay renders are
-    # visible in the app log instead of appearing frozen until subprocess.run ends.
-    import tempfile
-    import time as _time
-
-    def run_overlay_with_progress(run_cmd: list[str], run_encoder: str) -> tuple[int, str]:
-        total_duration = 0.0
-        if ffmpeg.lower().endswith("ffmpeg.exe"):
-            try:
-                ffprobe_path = str(Path(ffmpeg).with_name("ffprobe.exe"))
-                total_duration = max(0.001, probe_duration(ffprobe_path, input_video))
-            except Exception as exc:
-                # Progress reporting must never prevent the actual overlay render.
-                log(f"⚠️ Overlay duration probe unavailable; continuing with elapsed-time logs: {exc}")
-        started = _time.monotonic()
-        last_logged_percent = -5
-        last_logged_at = started
-        last_out_seconds = 0.0
-        log(f"🎨 Overlay render started | encoder={run_encoder} | filters={len(graph)} | size={fw}x{fh} | input={input_video.name}")
-        with tempfile.TemporaryFile(mode="w+t", encoding="utf-8", errors="replace") as err_file:
-            proc = subprocess.Popen(
-                run_cmd, stdout=subprocess.PIPE, stderr=err_file,
-                text=True, encoding="utf-8", errors="replace", bufsize=1,
-            )
-            if proc.stdout is not None:
-                for raw_line in proc.stdout:
-                    line = raw_line.strip()
-                    if "=" not in line:
-                        continue
-                    key, value = line.split("=", 1)
-                    if key == "out_time_ms":
-                        try:
-                            last_out_seconds = max(0.0, int(value) / 1_000_000.0)
-                        except ValueError:
-                            pass
-                    elif key == "progress":
-                        now = _time.monotonic()
-                        elapsed = now - started
-                        if total_duration > 0:
-                            percent = min(100, int(last_out_seconds * 100 / total_duration))
-                            if percent >= last_logged_percent + 5 or now - last_logged_at >= 10:
-                                speed = last_out_seconds / elapsed if elapsed > 0 else 0.0
-                                log(f"🎨 Overlay progress {percent:3d}% | {last_out_seconds:.1f}/{total_duration:.1f}s | elapsed={elapsed:.0f}s | speed={speed:.2f}x | encoder={run_encoder}")
-                                last_logged_percent = percent
-                                last_logged_at = now
-                        elif now - last_logged_at >= 10:
-                            log(f"🎨 Overlay still running | elapsed={elapsed:.0f}s | processed={last_out_seconds:.1f}s | encoder={run_encoder}")
-                            last_logged_at = now
-            return_code = proc.wait()
-            err_file.seek(0)
-            stderr_text = err_file.read()
-        elapsed = _time.monotonic() - started
-        if return_code == 0:
-            log(f"✅ Overlay render process ended | elapsed={elapsed:.1f}s | processed={last_out_seconds:.1f}s | encoder={run_encoder}")
-        else:
-            log(f"❌ Overlay render process failed | exit={return_code} | elapsed={elapsed:.1f}s | encoder={run_encoder}")
-        return return_code, stderr_text
-
-    return_code, stderr_text = run_overlay_with_progress(cmd, encoder)
-    if return_code != 0 and encoder in _HARDWARE_ENCODERS:
-        log(f"⚠️ Overlay {encoder} failed — libx264 CPU fallback")
+    cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]", "-an"] + _encoder_args(encoder, quality) + ["-movflags", "+faststart", str(output_video)]
+    p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if p.returncode != 0 and encoder == "h264_nvenc":
+        log("⚠️ Overlay NVENC failed — libx264 fallback")
         cmd2 = cmd[:]
         # Rebuild tail safely rather than trying to mutate codec options in-place.
         map_pos = cmd2.index("-map")
         prefix = cmd2[:map_pos] + ["-map", "[vout]", "-an"]
-        cmd2 = prefix + _encoder_args("libx264", quality) + ["-progress", "pipe:1", "-nostats", "-movflags", "+faststart", str(output_video)]
-        return_code, stderr_text = run_overlay_with_progress(cmd2, "libx264")
-    if return_code != 0 or not output_video.is_file() or output_video.stat().st_size < 5000:
-        raise RuntimeError("Production overlay render failed: " + stderr_text[-3000:])
-    log(f"🎨 Overlay output ready | {output_video.name} | {output_video.stat().st_size / (1024 * 1024):.1f} MiB")
+        cmd2 = prefix + _encoder_args("libx264", quality) + ["-movflags", "+faststart", str(output_video)]
+        p = subprocess.run(cmd2, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    if p.returncode != 0 or not output_video.is_file() or output_video.stat().st_size < 5000:
+        raise RuntimeError("Production overlay render failed: " + p.stderr[-3000:])
     return output_video
 
 
@@ -1401,16 +1332,9 @@ class EdgeSmartSync:
 
         self.log("🎬 Smart Sync video parts render စမယ်...")
         encoders = ffmpeg_encoders(self.ffmpeg)
-        # Prefer Intel Quick Sync on this branch: it is verified working on the user's UHD 630.
-        preferred = next((name for name in ("h264_qsv", "h264_nvenc", "libx264") if name in encoders), "libx264")
+        preferred = "h264_nvenc" if "h264_nvenc" in encoders else "libx264"
         remembered = str(checkpoint.get("selected_encoder") or "")
-        encoder = remembered if remembered in {"h264_qsv", "h264_nvenc", "libx264"} and remembered in encoders else preferred
-        encoder_label = {
-            "h264_qsv": "Intel Quick Sync Video (QSV)",
-            "h264_nvenc": "NVIDIA NVENC",
-            "libx264": "CPU / libx264",
-        }.get(encoder, encoder)
-        self.log(f"🎛️ Video encoder selected: {encoder} — {encoder_label}")
+        encoder = remembered if remembered in {"h264_nvenc", "libx264"} else preferred
         video_parts: list[Path] = []
         # Cumulative frame lock: each part gets round(audio_end*30) - frames_so_far
         # frames, so video never drifts more than half a frame from the narration.
@@ -1446,7 +1370,7 @@ class EdgeSmartSync:
                 self.log(f"♻️ VIDEO [{idx}/{len(segments)}] {base}.mp4 reuse")
             else:
                 self.progress(idx - 1, len(segments), f"Smart Sync video {idx}/{len(segments)}")
-                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | encoder={encoder}")
+                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s")
                 try:
                     metrics = render_video_part(
                         self.ffmpeg, source, dst, seg, target, encoder,
@@ -1456,9 +1380,9 @@ class EdgeSmartSync:
                         frame_count=frame_count, layout=layout, quality=self.video_quality,
                     )
                 except Exception:
-                    # If a hardware encoder fails on the first new part, fall back globally to CPU.
-                    if encoder in _HARDWARE_ENCODERS and not video_parts:
-                        self.log(f"⚠️ {encoder} မရပါ — libx264 CPU encoder ကို fallback လုပ်မယ်။")
+                    # Only on the first non-reused part, allow global NVENC -> CPU fallback.
+                    if encoder == "h264_nvenc" and not video_parts:
+                        self.log("⚠️ NVENC မရပါ — libx264 CPU encoder ကို fallback လုပ်မယ်။")
                         encoder = "libx264"
                         # Encoder changed, invalidate any video checkpoint rows to avoid mixed codecs.
                         checkpoint["video"] = {}

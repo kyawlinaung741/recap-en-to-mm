@@ -778,20 +778,47 @@ def concat_video_parts(ffmpeg: str, parts: list[Path], output: Path, work_dir: P
         raise RuntimeError(f"Video concat failed:\n{result.stderr[-4000:]}")
 
 
-def mux_audio(ffmpeg: str, video: Path, audio: Path, output: Path, volume_percent: int = 100) -> None:
-    # Narration gain (100 = unchanged); the limiter keeps a raised voice from clipping.
-    volume = [] if int(volume_percent) == 100 else [
-        "-af", f"volume={int(volume_percent) / 100.0:.3f},alimiter=limit=0.95:level=disabled"]
-    cmd = [
-        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-        "-i", str(video), "-i", str(audio),
-        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", *volume, "-c:a", "aac", "-b:a", "192k",
-        "-shortest", "-movflags", "+faststart", str(output),
-    ]
+def mux_audio(ffmpeg: str, ffprobe: str, video: Path, narration: Path, source_video: Path, output: Path,
+              narration_volume_percent: int = 100, original_volume_percent: int = 15,
+              auto_duck: bool = True, log=None) -> None:
+    """Mux narration with optional original-video audio and narration-driven ducking."""
+    narration_gain = max(0, min(300, int(narration_volume_percent))) / 100.0
+    original_gain = max(0, min(100, int(original_volume_percent))) / 100.0
+    probe = subprocess.run(
+        [ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=index",
+         "-of", "csv=p=0", str(source_video)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    has_source_audio = probe.returncode == 0 and bool(probe.stdout.strip()) and original_gain > 0
+    if has_source_audio:
+        bg_filter = "[2:a]aresample=async=1:first_pts=0,volume={:.3f}[bg0];".format(original_gain)
+        if auto_duck:
+            bg_filter += "[bg0][narr]sidechaincompress=threshold=0.025:ratio=8:attack=20:release=450[bg];"
+        else:
+            bg_filter += "[bg0]anull[bg];"
+        filter_graph = (
+            "[1:a]volume={:.3f},alimiter=limit=0.95:level=disabled[narr];".format(narration_gain)
+            + bg_filter
+            + "[bg][narr]amix=inputs=2:duration=longest:dropout_transition=2,alimiter=limit=0.98[aout]"
+        )
+        cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+               "-i", str(video), "-i", str(narration), "-i", str(source_video),
+               "-filter_complex", filter_graph, "-map", "0:v:0", "-map", "[aout]",
+               "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest",
+               "-movflags", "+faststart", str(output)]
+        if log:
+            log(f"🔊 Audio mix | original={int(original_gain * 100)}% | narration={int(narration_gain * 100)}% | auto-duck={bool(auto_duck)}")
+    else:
+        narration_filter = f"volume={narration_gain:.3f},alimiter=limit=0.95:level=disabled"
+        cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+               "-i", str(video), "-i", str(narration), "-map", "0:v:0", "-map", "1:a:0",
+               "-c:v", "copy", "-af", narration_filter, "-c:a", "aac", "-b:a", "192k",
+               "-shortest", "-movflags", "+faststart", str(output)]
+        if log:
+            log("🔊 No source audio found (or original volume is 0%); narration-only mux")
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
-        raise RuntimeError(f"Final mux failed:\n{result.stderr[-4000:]}")
-
+        raise RuntimeError(f"Final audio mix failed:\\n{result.stderr[-4000:]}")
 
 
 def _clamp01(value: Any, default: float = 0.0) -> float:
@@ -1528,9 +1555,11 @@ class EdgeSmartSync:
             )
         self.log(f"🎧 {tts_label} audio mux...")
         volume_percent = int(getattr(self, "voice_volume_percent", 100) or 100)
-        if volume_percent != 100:
-            self.log(f"🔊 Voice volume {volume_percent}% applied at final mux (limiter on)")
-        mux_audio(self.ffmpeg, video_for_mux, paths.voice, paths.final, volume_percent)
+        original_volume = int(getattr(self, "original_audio_volume_percent", 15))
+        auto_duck = bool(getattr(self, "auto_duck", True))
+        mux_audio(self.ffmpeg, self.ffprobe, video_for_mux, paths.voice, self.source_path, paths.final,
+                  narration_volume_percent=volume_percent, original_volume_percent=original_volume,
+                  auto_duck=auto_duck, log=self.log)
         final_duration = probe_duration(self.ffprobe, paths.final)
         self.log(f"✅ FINAL READY: {paths.final}")
         self.log(f"⏱️ Final duration: {final_duration:.2f}s")

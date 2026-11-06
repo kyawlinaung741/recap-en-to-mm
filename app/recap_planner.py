@@ -1030,7 +1030,69 @@ def _extract_json_payload(raw_text: str) -> Any:
         raise
 
 
-def _gemini_json(ai: Any, prompt: str, *, retries: int = 3, log: LogFn | None = None) -> Any:
+_STORY_CONTEXT_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "characters": {"type": "ARRAY"},
+        "relationships": {"type": "ARRAY"},
+        "places": {"type": "ARRAY"},
+        "terms": {"type": "ARRAY"},
+        "plot_state": {"type": "ARRAY"},
+        "name_consistency": {"type": "ARRAY"},
+        "unresolved": {"type": "ARRAY"},
+    },
+    "required": [
+        "characters", "relationships", "places", "terms",
+        "plot_state", "name_consistency", "unresolved",
+    ],
+}
+
+_TRANSLATION_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "items": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "id": {"type": "INTEGER"},
+                    "translation": {"type": "STRING"},
+                },
+                "required": ["id", "translation"],
+            },
+        },
+    },
+    "required": ["items"],
+}
+
+_AUDIT_RESPONSE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "checks": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "id": {"type": "INTEGER"},
+                    "status": {"type": "STRING", "enum": ["pass", "repair"]},
+                    "translation": {"type": "STRING"},
+                },
+                "required": ["id", "status"],
+            },
+        },
+    },
+    "required": ["checks"],
+}
+
+
+def _gemini_json(
+    ai: Any,
+    prompt: str,
+    *,
+    retries: int = 3,
+    log: LogFn | None = None,
+    response_schema: dict[str, Any] | None = None,
+) -> Any:
     """Run one logical Gemini request with model/key failover.
 
     Fallback switches never consume JSON/validation retries, so the exact same
@@ -1045,7 +1107,14 @@ def _gemini_json(ai: Any, prompt: str, *, retries: int = 3, log: LogFn | None = 
         try:
             ai._enable_proxy()
             try:
-                response = ai.client.models.generate_content(model=ai.text_model, contents=prompt)
+                # Use the Chat API (recommended for automatic function-calling compatibility)
+                # and request JSON output at the API level so translation/context payloads are
+                # less likely to fail parsing because of missing commas, quotes, or code fences.
+                chat = ai.client.chats.create(model=ai.text_model)
+                request_config: dict[str, Any] = {"response_mime_type": "application/json"}
+                if response_schema is not None:
+                    request_config["response_schema"] = response_schema
+                response = chat.send_message(prompt, config=request_config)
             finally:
                 ai._disable_proxy()
             return _extract_json_payload(getattr(response, "text", ""))
@@ -1164,9 +1233,7 @@ RULES:
 - Keep important relationships, aliases, roles, reveals, and terminology.
 - Keep plot_state chronological but compact. Do not invent anything.
 - If an earlier assumption is corrected by this chunk, update it.
-- Return JSON only with these keys:
-  characters, relationships, places, terms, plot_state, name_consistency, unresolved
-- Each key must contain a compact JSON array. Keep the total memory concise enough to reuse in every later request.
+Return the context memory in the structured format specified by the response schema. Keep it concise enough to reuse in every later request.
 
 EXISTING MEMORY:
 {json.dumps(memory, ensure_ascii=False)}
@@ -1175,7 +1242,7 @@ SOURCE CHUNK {i}/{len(batches)}:
 {_source_lines(batch)}
 """
         try:
-            data = _gemini_json(ai, prompt, log=log)
+            data = _gemini_json(ai, prompt, log=log, response_schema=_STORY_CONTEXT_RESPONSE_SCHEMA)
             if not isinstance(data, dict):
                 raise RuntimeError("Story context response must be a JSON object")
         except (GeminiKeyPoolExhaustedError, InterruptedError):
@@ -1293,7 +1360,7 @@ HARD RULES:
 6. Context is READ-ONLY. Never copy events from previous/next context into a current ID.
 7. Maintain consistent names, relationships, places, objects, and terminology.
 8. Timestamps are local metadata. Return no timestamps.
-9. Return JSON only with top-level key "items". Each item must contain integer "id" and non-empty string "translation".
+9. Follow the structured response format. Each item must contain its exact source ID and a non-empty Burmese translation.
 10. NEVER return placeholders such as "...", "…", dashes, empty text, or schema/example text. Every spoken SOURCE row must produce actual target-language narration words.
 11. Write EVERY word in Burmese script — no English/Latin words (the Burmese voice cannot read them). Translate titles and terms; write names of people, places and techniques in Burmese letters by sound, with one spelling per name.
 12. A sentence often runs across two IDs. Each ID says only its own source words: never tell the next ID's part early, never say again what the previous ID already said.
@@ -1324,7 +1391,9 @@ CRITICAL OUTPUT ID PROTOCOL:
     last: Exception | None = None
     for attempt in range(1, 4):
         try:
-            payload = _gemini_json(ai, prompt, retries=1, log=log)
+            payload = _gemini_json(
+                ai, prompt, retries=1, log=log, response_schema=_TRANSLATION_RESPONSE_SCHEMA
+            )
             translated = _validate_translation_items(current, payload, log=log)
             _assert_no_adjacent_translation_duplicates(translated, previous_context)
             stray = [f"ID {int(x['id']):05d}: {' '.join(_foreign_letters(x['translation']))}"
@@ -1455,14 +1524,6 @@ def audit_and_repair_batch(
         if not expected_ids:
             return []
         exact_ids_json = json.dumps(expected_ids, ensure_ascii=False)
-        sample_checks = [{"id": expected_ids[0], "status": "pass"}]
-        if len(expected_ids) > 1:
-            sample_checks.append({
-                "id": expected_ids[1],
-                "status": "repair",
-                "translation": f"complete corrected output for ID {expected_ids[1]} only",
-            })
-        sample_json = json.dumps({"checks": sample_checks}, ensure_ascii=False)
         base_prompt = f"""
 You are a STRICT SENTENCE-LOCKED TRANSLATION AUDITOR.
 Audit the {target_name}. Every action/fact/object/dialogue/detail must remain inside the same ID as its SOURCE.
@@ -1482,10 +1543,7 @@ For EVERY CURRENT ID check:
 - no adjacent duplicate/near-duplicate outputs for different sources;
 - natural spoken narrator style, stable names/pronouns, and no invented information.
 
-Return JSON ONLY with every CURRENT ID once and in the exact sequence above.
-Example shape using ACTUAL IDs from this batch:
-{sample_json}
-Use status=pass to preserve a good translation byte-for-byte. Use repair only when necessary.
+Return one audit check for every CURRENT ID in the exact sequence above, using the structured response format. Use status=pass to preserve a good translation byte-for-byte. Use repair only when necessary.
 
 STORY CONTEXT:
 {json.dumps(story_context, ensure_ascii=False)}
@@ -1500,13 +1558,15 @@ NEXT SOURCE CONTEXT (READ-ONLY):
 {_source_lines(next_rows) if next_rows else '(none)'}
 
 FINAL ID CHECK BEFORE YOU RESPOND:
-Your checks[].id list MUST equal exactly: {exact_ids_json}
+The audit check IDs MUST equal exactly: {exact_ids_json}
 """
         prompt = base_prompt
         last_error: Exception | None = None
         for attempt in range(1, 3):
             try:
-                payload = _gemini_json(ai, prompt, retries=2, log=log)
+                payload = _gemini_json(
+                    ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA
+                )
                 checks = payload.get("checks") if isinstance(payload, dict) else None
                 if not isinstance(checks, list):
                     raise ValueError("audit response must contain a checks array")

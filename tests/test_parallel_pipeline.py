@@ -1,0 +1,48 @@
+import threading
+import time
+import unittest
+
+from parallel_pipeline import run_ordered_pipeline
+
+
+class ParallelPipelineTests(unittest.TestCase):
+    def test_producer_and_consumer_overlap_and_keep_order(self):
+        consumer_started = threading.Event()
+
+        def produce(value):
+            if value == 2:
+                self.assertTrue(consumer_started.wait(1.0))
+            return value * 10
+
+        def consume(value):
+            consumer_started.set()
+            time.sleep(0.01)
+            return value + 1
+
+        result = run_ordered_pipeline(
+            range(5), produce=produce, consume=consume, max_pending=2
+        )
+        self.assertEqual(result, [1, 11, 21, 31, 41])
+
+    def test_consumer_exception_is_returned_to_caller(self):
+        def consume(value):
+            if value == 2:
+                raise ValueError("render failed")
+            return value
+
+        with self.assertRaisesRegex(ValueError, "render failed"):
+            run_ordered_pipeline(
+                range(10), produce=lambda value: value,
+                consume=consume, max_pending=1
+            )
+
+    def test_invalid_queue_size(self):
+        with self.assertRaises(ValueError):
+            run_ordered_pipeline(
+                [], produce=lambda value: value,
+                consume=lambda value: value, max_pending=0
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

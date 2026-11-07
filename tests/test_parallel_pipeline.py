@@ -49,6 +49,32 @@ class ParallelPipelineTests(unittest.TestCase):
                 consume=lambda value: value, max_pending=0
             )
 
+    def test_producer_exception_is_returned_to_caller(self):
+        def produce(value):
+            if value == 2:
+                raise RuntimeError("tts failed")
+            return value
+
+        with self.assertRaisesRegex(RuntimeError, "tts failed"):
+            run_ordered_pipeline(
+                range(10), produce=produce,
+                consume=lambda value: value, max_pending=1
+            )
+
+    def test_stop_requested_before_production(self):
+        produced = []
+
+        def produce(value):
+            produced.append(value)
+            return value
+
+        with self.assertRaises(InterruptedError):
+            run_ordered_pipeline(
+                range(5), produce=produce, consume=lambda value: value,
+                max_pending=1, should_stop=lambda: True
+            )
+        self.assertEqual(produced, [])
+
 
 if __name__ == "__main__":
     unittest.main()

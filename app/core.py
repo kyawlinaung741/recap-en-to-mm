@@ -1297,7 +1297,8 @@ class EdgeSmartSync:
             base = segment_basename(seg)
             dst = paths.tts_parts / f"{base}.wav"
             fp = segment_fingerprint(seg, fingerprint_voice)
-            rec = checkpoint["audio"].get(base, {})
+            with checkpoint_lock:
+                rec = dict(checkpoint["audio"].get(base, {}))
             reusable = rec.get("fingerprint") == fp and dst.is_file() and dst.stat().st_size > 1000
             if reusable:
                 duration = probe_duration(self.ffprobe, dst)
@@ -1330,12 +1331,12 @@ class EdgeSmartSync:
                 duration = probe_duration(self.ffprobe, dst)
                 if duration <= 0.05:
                     raise RuntimeError(f"Generated audio duration invalid: {dst}")
-                checkpoint["audio"][base] = {
-                    "fingerprint": fp, "file": str(dst), "duration": round(duration, 3),
-                    "video_start": seg["video_start"], "video_end": seg["video_end"],
-                    "text": seg["narration"],
-                }
                 with checkpoint_lock:
+                    checkpoint["audio"][base] = {
+                        "fingerprint": fp, "file": str(dst), "duration": round(duration, 3),
+                        "video_start": seg["video_start"], "video_end": seg["video_end"],
+                        "text": seg["narration"],
+                    }
                     atomic_write_json(paths.checkpoint, checkpoint)
                 self.log(f"✅ {base}.wav = {duration:.2f}s")
             producer_state["tts_total"] += duration
@@ -1383,7 +1384,8 @@ class EdgeSmartSync:
                 **({"quality": self.video_quality} if self.video_quality != "1080" else {}),
             }, sort_keys=True).encode()
             vfp = hashlib.sha256(vfp_raw).hexdigest()
-            rec = checkpoint["video"].get(base, {})
+            with checkpoint_lock:
+                rec = dict(checkpoint["video"].get(base, {}))
             reusable = rec.get("fingerprint") == vfp and dst.is_file() and dst.stat().st_size > 5000
             if reusable:
                 self.log(f"♻️ VIDEO [{idx}/{len(segments)}] {base}.mp4 reuse")
@@ -1414,11 +1416,11 @@ class EdgeSmartSync:
                         raise
                 if metrics.get("hybrid_used", 0.0) >= 0.5:
                     self.log(f"   ↳ Hybrid: slow {metrics['applied_factor']:.3f}x + {int(metrics.get('freeze_count', 0))} short holds ({metrics.get('freeze_duration', 0.0):.2f}s total)")
-                checkpoint["video"][base] = {
-                    "fingerprint": vfp, "file": str(dst), "target_duration": round(target, 3),
-                    "encoder": encoder, "sync": {k: round(v, 6) for k, v in metrics.items()},
-                }
                 with checkpoint_lock:
+                    checkpoint["video"][base] = {
+                        "fingerprint": vfp, "file": str(dst), "target_duration": round(target, 3),
+                        "encoder": encoder, "sync": {k: round(v, 6) for k, v in metrics.items()},
+                    }
                     atomic_write_json(paths.checkpoint, checkpoint)
             self.progress(idx, len(segments), f"Video {idx}/{len(segments)}")
             payload["dst"] = str(dst)

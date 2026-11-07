@@ -61,10 +61,14 @@ def whisper_choice(language: str, other_model: str = WHISPER_MODEL_OTHER) -> tup
 
 
 GEMINI_MODEL_FALLBACK_CHAIN = [
+    # Current stable Flash first for fast, structured translation requests.
+    "gemini-3.8-flash",
+    # Higher-capability fallback, followed by older compatible models.
+    "gemini-4-argon",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
     "gemini-3.1-flash-lite",
 ]
 
@@ -143,7 +147,7 @@ def _configure_gemini_key_pool(
 
     models = [str(x).strip() for x in (model_chain or GEMINI_MODEL_FALLBACK_CHAIN) if str(x).strip()]
     if not models:
-        models = [str(getattr(ai, "text_model", "gemini-3.5-flash") or "gemini-3.5-flash")]
+        models = [str(getattr(ai, "text_model", "gemini-3.8-flash") or "gemini-3.8-flash")]
 
     model_index = 0
     key_index = 0
@@ -1033,13 +1037,16 @@ def _extract_json_payload(raw_text: str) -> Any:
 _STORY_CONTEXT_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
-        "characters": {"type": "ARRAY"},
-        "relationships": {"type": "ARRAY"},
-        "places": {"type": "ARRAY"},
-        "terms": {"type": "ARRAY"},
-        "plot_state": {"type": "ARRAY"},
-        "name_consistency": {"type": "ARRAY"},
-        "unresolved": {"type": "ARRAY"},
+        # Gemini structured output requires an explicit item schema for every array.
+        # These memory collections are intentionally plain text; the planner only
+        # carries them forward as context and does not parse individual entries.
+        "characters": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "relationships": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "places": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "terms": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "plot_state": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "name_consistency": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "unresolved": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
     "required": [
         "characters", "relationships", "places", "terms",
@@ -1729,7 +1736,7 @@ class RecapPlanBuilder:
         atomic_max_duration: float = 5.6,
         atomic_target_duration: float = 4.2,
         gemini_request_timeout_seconds: int = 120,
-        gemini_text_model: str = "gemini-3.5-flash",
+        gemini_text_model: str = "gemini-3.8-flash",
         source_language: str = "auto",
         whisper_model_other: str = WHISPER_MODEL_OTHER,
     ):
@@ -1753,7 +1760,7 @@ class RecapPlanBuilder:
         self.atomic_max_duration = max(4.0, float(atomic_max_duration))
         self.atomic_target_duration = max(2.5, min(float(atomic_target_duration), self.atomic_max_duration))
         self.gemini_request_timeout_seconds = max(30, min(int(gemini_request_timeout_seconds), 600))
-        self.gemini_text_model = _clean(gemini_text_model) or "gemini-3.5-flash"
+        self.gemini_text_model = _clean(gemini_text_model) or "gemini-3.8-flash"
 
     def _validate_runtime(self) -> None:
         required = [

@@ -136,7 +136,7 @@ Title / Logo / စာ / စာတန်း အရွယ်တွေကို fra
 - **အရှည်ကို အသံနဲ့ ညှိ** — ရုပ်တစ်ပိုင်းစီကို မြန်မာအသံ အရှည်အတိုင်း ဖြစ်အောင် နှေးတာ / မြန်တာ (`setpts`) လုပ်တယ်။
 - **အမြန်ဆုံး ၁.၂၅ ဆ** — ရုပ်ကို ၁.၂၅ ဆထက် ပိုမမြန်စေဘူး (`max_video_speed`)။ အသံက ဒီထက်တိုနေသေးရင် အဲ့အပိုင်းရဲ့ နောက်ဆုံးက ရုပ်နည်းနည်းကို ဖြတ်တယ်။ အသံက ပိုရှည်ရင် ရုပ်ကို နှေးပေးတယ်။
 - **Frame ကို တွဲတွက်** — အပိုင်းတိုင်းရဲ့ frame အရေအတွက်ကို အသံရဲ့ စုစုပေါင်း အချိန်နဲ့ တွက်တယ် (30 fps)။ အပိုင်း ရာနဲ့ချီ ရှိနေတောင် ရုပ်နဲ့ အသံ frame တစ်ဝက်ထက် ပိုမကွာဘူး။ အဆုံးမှာ log က `SYNC OK: picture=… narration=… diff=…` လို့ ပြပါတယ်။
-- **ပုံစံ (Ratio / Fill)** — NVIDIA ရှိရင် NVENC၊ မရှိရင် libx264 နဲ့ ထုတ်တယ်။
+- **ပုံစံ (Ratio / Fill)** — FFmpeg build က support လုပ်ရင် Intel Quick Sync (`h264_qsv`) ကို အရင်သုံးတယ်။ မရရင် NVIDIA NVENC (`h264_nvenc`), အဲဒါလည်း မရရင် CPU (`libx264`) ကို fallback လုပ်တယ်။
 
   | Ratio | Video အရွယ် |
   |---|---|
@@ -151,6 +151,15 @@ Title / Logo / စာ / စာတန်း အရွယ်တွေကို fra
   - **Crop to fill** — ပုံကို ချဲ့ပြီး frame ပြည့်အောင် လုပ်တယ်။ ဘေးက ပိုတဲ့အပိုင်းကို ဖြတ်တယ်။
 
   Zoom / Flip နဲ့ Title၊ Logo၊ Blur box တွေက ရွေးထားတဲ့ Ratio အတိုင်း ထွက်ပြီး preview မှာလည်း ဒီအတိုင်း ပြတယ်။
+
+## Narrator အသံနဲ့ Video Render တစ်ပြိုင်နက်လုပ်ဆောင်ပုံ
+
+Smart Sync အဆင့်မှာ **Producer / Consumer Pipeline** သုံးထားတယ်။ Producer က Narrator TTS အပိုင်းတစ်ခုချင်းကို အစဉ်လိုက် ထုတ်နေချိန် Consumer thread တစ်ခုက ရရှိပြီးသားအပိုင်းရဲ့ Video ကို FFmpeg နဲ့ တစ်ပြိုင်နက် render လုပ်တယ်။ Pending queue ကို **၂ ပိုင်း (`max_pending=2`)** အထိပဲ ကန့်သတ်ထားလို့ အလုပ်များလာတဲ့အခါ memory မတိုးပွားအောင် ထိန်းပေးတယ်။
+
+- Segment အစီအစဉ် မပြောင်းဘူး။ Smart Sync timing နဲ့ checkpoint ကို ဆက်ထိန်းထားပြီး ပြီးပြီးသား Audio / Video အပိုင်းတွေကို ပြန်သုံးနိုင်တယ်။
+- STOP တောင်းဆိုမှုနဲ့ render error တွေကို main worker ဆီ ပြန်ပို့တယ်။
+- Pipeline ပြီးမှ Audio / Video ကို ပေါင်းစပ်ပြီး နောက်ဆုံး narrator-only audio ကို mux လုပ်တယ်။
+- Queue နဲ့ Threading အတွက် Python standard library ကိုပဲ သုံးထားလို့ ဒီ feature ကြောင့် package အသစ် ထပ်သွင်းစရာ မလိုဘူး။
 
 ## Gemini key နဲ့ ကန့်သတ်ချက်
 
@@ -221,7 +230,8 @@ app/
   planner_worker.py        အဆင့် ၁: Whisper → story context → ဘာသာပြန် → Smart Sync plan
   recap_planner.py         Planner (စာပိုင်းခွဲ၊ Gemini prompt၊ audit၊ ID စစ်တာ)
   render_worker.py         အဆင့် ၂: Edge TTS → Smart Sync render
-  core.py                  Edge TTS, Short pauses, Smart Sync, overlay, mux
+  core.py                  Edge TTS, parallel Smart Sync render, overlay, mux
+  parallel_pipeline.py     bounded TTS producer / FFmpeg video consumer
   preview_tools.py         Preview frame / logo
   splitter.py              Splitter: ဘယ်မှာ ဖြတ်မလဲ (smart cut)၊ အပိုင်း render
   splitter_tab.py          Splitter tab UI
@@ -370,6 +380,11 @@ always written to `SRT_for_upload\` (not next to the video, where players would 
 **Quality** (under Ratio): 1080p (as before) / 720p / 480p. Measured on 4 CPU threads without an NVIDIA card,
 20 s of video: 1080p 52 s, 720p 9 s, 480p 3.6 s. Title, logo, text and subtitle sizes are scaled so the look is
 the same; changing it re-renders only the video parts (translation and voice are kept). Splitter has it too.
+
+### Parallel narrator TTS + video rendering
+
+Smart Sync runs a bounded producer/consumer pipeline: the producer creates narration clips in segment order while one FFmpeg consumer renders each ready video segment concurrently. The queue holds at most **2 pending segments**, limiting buffered work. Segment order, Smart Sync timing and reusable audio/video checkpoints are preserved. STOP requests and render errors are propagated to the worker. Audio/video concatenation and final narrator-only audio muxing happen after the pipeline completes. This uses Python's standard-library queue/threading modules; no extra package is required.
+
 
 ### Advanced (`config.json`, created on the first START)
 `ffmpeg_path`, `ffprobe_path`, `python_path`, `max_video_speed` (1.25),

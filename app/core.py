@@ -1393,9 +1393,10 @@ class EdgeSmartSync:
             else:
                 self.progress(idx - 1, len(segments), f"Smart Sync video {idx}/{len(segments)}")
                 self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | encoder={encoder}")
+                actual_encoder = encoder
                 try:
                     metrics = render_video_part(
-                        self.ffmpeg, source, dst, seg, target, encoder,
+                        self.ffmpeg, source, dst, seg, target, actual_encoder,
                         self.mirror_video, self.zoom_factor, self.max_video_speed, self.max_video_slow,
                         self.smooth_freeze_fallback, self.max_freeze_hold,
                         frame_count=frame_count, layout=layout, quality=self.video_quality,
@@ -1403,14 +1404,14 @@ class EdgeSmartSync:
                 except Exception:
                     if encoder in _HARDWARE_ENCODERS:
                         self.log(f"⚠️ {encoder} မရပါ — libx264 CPU encoder ကို ဒီ segment အတွက် fallback လုပ်မယ်။")
-                        fallback_encoder = "libx264"
+                        actual_encoder = "libx264"
                         metrics = render_video_part(
-                            self.ffmpeg, source, dst, seg, target, fallback_encoder,
+                            self.ffmpeg, source, dst, seg, target, actual_encoder,
                             self.mirror_video, self.zoom_factor, self.max_video_speed, self.max_video_slow,
                             self.smooth_freeze_fallback, self.max_freeze_hold,
                             frame_count=frame_count, layout=layout, quality=self.video_quality,
                         )
-                        vfp_raw = vfp_raw.replace(f'"encoder": "{encoder}"'.encode(), f'"encoder": "{fallback_encoder}"'.encode())
+                        vfp_raw = vfp_raw.replace(f'"encoder": "{encoder}"'.encode(), f'"encoder": "{actual_encoder}"'.encode())
                         vfp = hashlib.sha256(vfp_raw).hexdigest()
                     else:
                         raise
@@ -1419,7 +1420,7 @@ class EdgeSmartSync:
                 with checkpoint_lock:
                     checkpoint["video"][base] = {
                         "fingerprint": vfp, "file": str(dst), "target_duration": round(target, 3),
-                        "encoder": encoder, "sync": {k: round(v, 6) for k, v in metrics.items()},
+                        "encoder": actual_encoder, "sync": {k: round(v, 6) for k, v in metrics.items()},
                     }
                     atomic_write_json(paths.checkpoint, checkpoint)
             self.progress(idx, len(segments), f"Video {idx}/{len(segments)}")

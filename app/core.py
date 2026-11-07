@@ -1274,15 +1274,24 @@ class EdgeSmartSync:
             fingerprint_voice = self.voice + "|edge-tts-v1|rate=" + self.edge_tts_rate + "|pitch=" + self.edge_tts_pitch
         checkpoint["tts_provider"] = provider
 
+        from parallel_pipeline import run_ordered_pipeline
+        checkpoint_lock = threading.Lock()
         timing: list[dict[str, Any]] = []
         audio_parts: list[Path] = []
-        cursor = 0.0
+        producer_state = {"cursor": 0.0, "tts_total": 0.0, "frames_done": 0}
         short_pauses = bool(self.short_pauses)
         tts_total = 0.0
+        encoders = ffmpeg_encoders(self.ffmpeg) if self.render_final_video else set()
+        # Prefer Intel QSV on the verified UHD 630, then NVIDIA NVENC, then CPU.
+        preferred = next((name for name in ("h264_qsv", "h264_nvenc", "libx264") if name in encoders), "libx264")
+        remembered = str(checkpoint.get("selected_encoder") or "")
+        encoder = remembered if remembered in {"h264_qsv", "h264_nvenc", "libx264"} and remembered in encoders else preferred
+        if self.render_final_video:
+            self.log(f"🎛️ Video encoder selected: {encoder}")
 
-        # AUDIO: timestamp segment = master save unit. The user's engine may split
-        # sentences internally, but only one deterministic WAV is kept per timestamp segment.
-        for idx, seg in enumerate(segments, 1):
+        def produce_audio(seg: dict[str, Any]) -> dict[str, Any]:
+            """Produce one deterministic narration clip and its frame-locked timing."""
+            idx = int(seg["segment_id"])
             if self.should_stop():
                 raise InterruptedError("STOP requested — လက်ရှိပြီးထားတာတွေ checkpoint ထဲသိမ်းထားပါတယ်။")
             base = segment_basename(seg)
@@ -1304,76 +1313,141 @@ class EdgeSmartSync:
                         plain = without_english(speak)
                         if provider == "gemini" or is_edge_refused(first) or plain == speak or not any(ch.isalpha() for ch in plain):
                             raise
-                        # A line mixing English and Burmese sometimes gets no audio at all (2026-10-12).
-                        self.log(f"⚠️ [{idx}/{len(segments)}] no audio — trying again without the English words "
-                                 "(Edit Text can rewrite the line)")
+                        self.log(f"⚠️ [{idx}/{len(segments)}] no audio — trying again without the English words (Edit Text can rewrite the line)")
                         produced = engine.generate_channel99_voice(plain, self.voice)
                     if not produced or not Path(produced).is_file():
                         raise RuntimeError("TTS output path မရပါ။")
                 except Exception as exc:
-                    if is_edge_refused(exc):            # the network, not the text: no Edit Text offer
+                    if is_edge_refused(exc):
                         raise RuntimeError(f"Edge TTS stopped at line {idx}/{len(segments)}.\n\n{exc}") from exc
-                    # "FAILED at segment N" lets the app open Edit Text on that line.
                     if provider == "gemini":
                         raise RuntimeError(f"Gemini TTS stopped at line {idx}/{len(segments)} ({base}).\n\n{exc}") from exc
-                    raise RuntimeError(f"Edge TTS FAILED at segment {idx} ({base}): {exc}\n\n"
-                                       f"Text: {seg['narration'][:200]}") from exc
+                    raise RuntimeError(f"Edge TTS FAILED at segment {idx} ({base}): {exc}\n\nText: {seg['narration'][:200]}") from exc
                 produced_path = Path(produced).resolve()
                 shutil.copy2(produced_path, dst)
-                if provider == "edge_tts":           # Gemini clips stay in the job's cache (a stopped run goes on)
+                if provider == "edge_tts":
                     produced_path.unlink(missing_ok=True)
                 duration = probe_duration(self.ffprobe, dst)
                 if duration <= 0.05:
                     raise RuntimeError(f"Generated audio duration invalid: {dst}")
                 checkpoint["audio"][base] = {
-                    "fingerprint": fp,
-                    "file": str(dst),
-                    "duration": round(duration, 3),
-                    "video_start": seg["video_start"],
-                    "video_end": seg["video_end"],
+                    "fingerprint": fp, "file": str(dst), "duration": round(duration, 3),
+                    "video_start": seg["video_start"], "video_end": seg["video_end"],
                     "text": seg["narration"],
                 }
-                atomic_write_json(paths.checkpoint, checkpoint)
+                with checkpoint_lock:
+                    atomic_write_json(paths.checkpoint, checkpoint)
                 self.log(f"✅ {base}.wav = {duration:.2f}s")
-
+            producer_state["tts_total"] += duration
             part = dst
-            tts_total += duration
             if short_pauses:
                 window = float(seg["video_end"]) - float(seg["video_start"])
-                part, duration = trim_edge_silence(dst, paths.tts_parts.parent / "tts_parts_short" / dst.name,
-                                                   min_duration=window / self.max_video_speed)
-            start = cursor
-            end = cursor + duration
-            timing.append({
-                "segment_id": seg["segment_id"],
-                "source_index": seg["source_index"],
-                "video_start": seg["video_start"],
-                "video_end": seg["video_end"],
-                "audio_start": round(start, 3),
-                "audio_end": round(end, 3),
-                "audio_duration": round(duration, 3),
-                "text": seg["narration"],
+                part, duration = trim_edge_silence(
+                    dst, paths.tts_parts.parent / "tts_parts_short" / dst.name,
+                    min_duration=window / self.max_video_speed,
+                )
+            start_time = producer_state["cursor"]
+            end_time = start_time + duration
+            producer_state["cursor"] = end_time
+            audio_end_frame = int(round(end_time * 30))
+            frame_count = max(1, audio_end_frame - int(producer_state["frames_done"]))
+            producer_state["frames_done"] += frame_count
+            item = {
+                "segment_id": seg["segment_id"], "source_index": seg["source_index"],
+                "video_start": seg["video_start"], "video_end": seg["video_end"],
+                "audio_start": round(start_time, 3), "audio_end": round(end_time, 3),
+                "audio_duration": round(duration, 3), "text": seg["narration"],
                 "audio_file": str(part),
-            })
-            cursor = end
-            audio_parts.append(part)
+            }
             self.progress(idx, len(segments), f"Audio {idx}/{len(segments)}")
+            return {"index": idx, "seg": seg, "item": item, "base": base, "dst": None, "frame_count": frame_count}
 
+        def consume_video(payload: dict[str, Any]) -> dict[str, Any]:
+            """Render one ready audio segment while the producer makes the next one."""
+            seg = payload["seg"]
+            item = payload["item"]
+            idx = int(payload["index"])
+            base = payload["base"]
+            dst = paths.video_parts / f"{base}.mp4"
+            target = float(item["audio_duration"])
+            frame_count = int(payload["frame_count"])
+            vfp_raw = json.dumps({
+                "frame_count": frame_count, "source": str(source.resolve()),
+                "source_mtime": source.stat().st_mtime_ns,
+                "start": seg["video_start"], "end": seg["video_end"], "target": target,
+                "sync_mode": "hybrid_recap_distributed_freeze",
+                "max_speed": self.max_video_speed, "max_slow": self.max_video_slow,
+                "smooth_freeze": self.smooth_freeze_fallback, "max_freeze_hold": self.max_freeze_hold,
+                "mirror": self.mirror_video, "zoom": self.zoom_factor, "encoder": encoder,
+                "frame": [layout["ratio"], layout["fill"], layout["cw"], layout["ch"]],
+                **({"quality": self.video_quality} if self.video_quality != "1080" else {}),
+            }, sort_keys=True).encode()
+            vfp = hashlib.sha256(vfp_raw).hexdigest()
+            rec = checkpoint["video"].get(base, {})
+            reusable = rec.get("fingerprint") == vfp and dst.is_file() and dst.stat().st_size > 5000
+            if reusable:
+                self.log(f"♻️ VIDEO [{idx}/{len(segments)}] {base}.mp4 reuse")
+                metrics = rec.get("sync") or {}
+            else:
+                self.progress(idx - 1, len(segments), f"Smart Sync video {idx}/{len(segments)}")
+                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | encoder={encoder}")
+                try:
+                    metrics = render_video_part(
+                        self.ffmpeg, source, dst, seg, target, encoder,
+                        self.mirror_video, self.zoom_factor, self.max_video_speed, self.max_video_slow,
+                        self.smooth_freeze_fallback, self.max_freeze_hold,
+                        frame_count=frame_count, layout=layout, quality=self.video_quality,
+                    )
+                except Exception:
+                    if encoder in _HARDWARE_ENCODERS:
+                        self.log(f"⚠️ {encoder} မရပါ — libx264 CPU encoder ကို ဒီ segment အတွက် fallback လုပ်မယ်။")
+                        fallback_encoder = "libx264"
+                        metrics = render_video_part(
+                            self.ffmpeg, source, dst, seg, target, fallback_encoder,
+                            self.mirror_video, self.zoom_factor, self.max_video_speed, self.max_video_slow,
+                            self.smooth_freeze_fallback, self.max_freeze_hold,
+                            frame_count=frame_count, layout=layout, quality=self.video_quality,
+                        )
+                        vfp_raw = vfp_raw.replace(f'"encoder": "{encoder}"'.encode(), f'"encoder": "{fallback_encoder}"'.encode())
+                        vfp = hashlib.sha256(vfp_raw).hexdigest()
+                    else:
+                        raise
+                if metrics.get("hybrid_used", 0.0) >= 0.5:
+                    self.log(f"   ↳ Hybrid: slow {metrics['applied_factor']:.3f}x + {int(metrics.get('freeze_count', 0))} short holds ({metrics.get('freeze_duration', 0.0):.2f}s total)")
+                checkpoint["video"][base] = {
+                    "fingerprint": vfp, "file": str(dst), "target_duration": round(target, 3),
+                    "encoder": encoder, "sync": {k: round(v, 6) for k, v in metrics.items()},
+                }
+                with checkpoint_lock:
+                    atomic_write_json(paths.checkpoint, checkpoint)
+            self.progress(idx, len(segments), f"Video {idx}/{len(segments)}")
+            payload["dst"] = str(dst)
+            return payload
+
+        if self.render_final_video:
+            pipeline_consumer = consume_video
+        else:
+            pipeline_consumer = lambda payload: payload
+        pipeline_results = run_ordered_pipeline(
+            segments,
+            produce=produce_audio,
+            consume=pipeline_consumer,
+            max_pending=2,
+            should_stop=self.should_stop,
+        )
+        timing = [result["item"] for result in pipeline_results]
+        audio_parts = [Path(item["audio_file"]) for item in timing]
+        tts_total = float(producer_state["tts_total"])
+        cursor = float(producer_state["cursor"])
         if short_pauses:
-            self.log(f"✂️ Short pauses: Edge TTS silence trimmed · voice {tts_total / 60:.1f} → {cursor / 60:.1f} min "
-                     f"(~0.25 s between lines; picture never cut for it)")
+            self.log(f"✂️ Short pauses: Edge TTS silence trimmed · voice {tts_total / 60:.1f} → {cursor / 60:.1f} min (~0.25 s between lines; picture never cut for it)")
         self.log("🔗 Timestamp audio parts concat...")
         concat_audio(self.ffmpeg, audio_parts, paths.voice, paths.work)
         final_audio_duration = probe_duration(self.ffprobe, paths.voice)
         self.log(f"✅ {paths.voice.name} = {final_audio_duration:.2f}s")
-
         sync_segments = [
-            {
-                "video_start": item["video_start"],
-                "video_end": item["video_end"],
-                "audio_start": item["audio_start"],
-                "audio_end": item["audio_end"],
-            }
+            {"video_start": item["video_start"], "video_end": item["video_end"],
+             "audio_start": item["audio_start"], "audio_end": item["audio_end"]}
             for item in timing
         ]
         out_plan = dict(plan)
@@ -1383,128 +1457,13 @@ class EdgeSmartSync:
         out_plan["actual_audio_duration"] = round(final_audio_duration, 3)
         out_plan["tts_timing_segments"] = timing
         out_plan["sync_segments"] = sync_segments
-        out_plan["subtitle_segments"] = [
-            {"start": item["audio_start"], "end": item["audio_end"], "text": item["text"]}
-            for item in timing
-        ]
+        out_plan["subtitle_segments"] = [{"start": item["audio_start"], "end": item["audio_end"], "text": item["text"]} for item in timing]
         out_plan["production_overlays"] = self.overlays
         atomic_write_json(paths.plan, out_plan)
-
         if not self.render_final_video:
             self.log("✅ Audio + Smart Sync plan READY (final video render skipped).")
-            return {
-                "audio": str(paths.voice),
-                "plan": str(paths.plan),
-                "final": None,
-                "segments": len(timing),
-            }
-
-        self.log("🎬 Smart Sync video parts render စမယ်...")
-        encoders = ffmpeg_encoders(self.ffmpeg)
-        # Prefer Intel Quick Sync on this branch: it is verified working on the user's UHD 630.
-        preferred = next((name for name in ("h264_qsv", "h264_nvenc", "libx264") if name in encoders), "libx264")
-        remembered = str(checkpoint.get("selected_encoder") or "")
-        encoder = remembered if remembered in {"h264_qsv", "h264_nvenc", "libx264"} and remembered in encoders else preferred
-        encoder_label = {
-            "h264_qsv": "Intel Quick Sync Video (QSV)",
-            "h264_nvenc": "NVIDIA NVENC",
-            "libx264": "CPU / libx264",
-        }.get(encoder, encoder)
-        self.log(f"🎛️ Video encoder selected: {encoder} — {encoder_label}")
-        video_parts: list[Path] = []
-        # Cumulative frame lock: each part gets round(audio_end*30) - frames_so_far
-        # frames, so video never drifts more than half a frame from the narration.
-        audio_cursor = 0.0
-        frames_done = 0
-
-        for idx, (seg, item) in enumerate(zip(segments, timing), 1):
-            if self.should_stop():
-                raise InterruptedError("STOP requested — video parts checkpoint ထဲကနေ Resume လုပ်နိုင်ပါတယ်။")
-            base = segment_basename(seg)
-            dst = paths.video_parts / f"{base}.mp4"
-            target = float(item["audio_duration"])
-            audio_cursor += target
-            frame_count = max(1, int(round(audio_cursor * 30)) - frames_done)
-            frames_done += frame_count
-            vfp_raw = json.dumps({
-                "frame_count": frame_count,
-                "source": str(source.resolve()),
-                "source_mtime": source.stat().st_mtime_ns,
-                "start": seg["video_start"], "end": seg["video_end"],
-                "target": target, "sync_mode": "hybrid_recap_distributed_freeze",
-                "max_speed": self.max_video_speed, "max_slow": self.max_video_slow,
-                "smooth_freeze": self.smooth_freeze_fallback, "max_freeze_hold": self.max_freeze_hold,
-                "mirror": self.mirror_video, "zoom": self.zoom_factor, "encoder": encoder,
-                "frame": [layout["ratio"], layout["fill"], layout["cw"], layout["ch"]],
-                # only a non-1080 quality is part of the key: parts made before the setting are reused
-                **({"quality": self.video_quality} if self.video_quality != "1080" else {}),
-            }, sort_keys=True).encode()
-            vfp = hashlib.sha256(vfp_raw).hexdigest()
-            rec = checkpoint["video"].get(base, {})
-            reusable = rec.get("fingerprint") == vfp and dst.is_file() and dst.stat().st_size > 5000
-            if reusable:
-                self.log(f"♻️ VIDEO [{idx}/{len(segments)}] {base}.mp4 reuse")
-            else:
-                self.progress(idx - 1, len(segments), f"Smart Sync video {idx}/{len(segments)}")
-                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | encoder={encoder}")
-                try:
-                    metrics = render_video_part(
-                        self.ffmpeg, source, dst, seg, target, encoder,
-                        self.mirror_video, self.zoom_factor,
-                        self.max_video_speed, self.max_video_slow,
-                        self.smooth_freeze_fallback, self.max_freeze_hold,
-                        frame_count=frame_count, layout=layout, quality=self.video_quality,
-                    )
-                except Exception:
-                    # If a hardware encoder fails on the first new part, fall back globally to CPU.
-                    if encoder in _HARDWARE_ENCODERS and not video_parts:
-                        self.log(f"⚠️ {encoder} မရပါ — libx264 CPU encoder ကို fallback လုပ်မယ်။")
-                        encoder = "libx264"
-                        # Encoder changed, invalidate any video checkpoint rows to avoid mixed codecs.
-                        checkpoint["video"] = {}
-                        for old in paths.video_parts.glob("*.mp4"):
-                            old.unlink(missing_ok=True)
-                        metrics = render_video_part(
-                            self.ffmpeg, source, dst, seg, target, encoder,
-                            self.mirror_video, self.zoom_factor,
-                            self.max_video_speed, self.max_video_slow,
-                            self.smooth_freeze_fallback, self.max_freeze_hold,
-                            frame_count=frame_count, layout=layout, quality=self.video_quality,
-                        )
-                        # Recompute fingerprint with CPU encoder.
-                        vfp_raw = json.dumps({
-                            "frame_count": frame_count,
-                            "source": str(source.resolve()),
-                            "source_mtime": source.stat().st_mtime_ns,
-                            "start": seg["video_start"], "end": seg["video_end"],
-                            "target": target, "sync_mode": "hybrid_recap_distributed_freeze",
-                            "max_speed": self.max_video_speed, "max_slow": self.max_video_slow,
-                            "smooth_freeze": self.smooth_freeze_fallback, "max_freeze_hold": self.max_freeze_hold,
-                            "mirror": self.mirror_video, "zoom": self.zoom_factor, "encoder": encoder,
-                            "frame": [layout["ratio"], layout["fill"], layout["cw"], layout["ch"]],
-                            **({"quality": self.video_quality} if self.video_quality != "1080" else {}),
-                        }, sort_keys=True).encode()
-                        vfp = hashlib.sha256(vfp_raw).hexdigest()
-                    else:
-                        raise
-                if metrics.get("hybrid_used", 0.0) >= 0.5:
-                    self.log(
-                        f"   ↳ Hybrid: slow {metrics['applied_factor']:.3f}x + "
-                        f"{int(metrics.get('freeze_count', 0))} short holds "
-                        f"({metrics.get('freeze_duration', 0.0):.2f}s total)"
-                    )
-                checkpoint["video"][base] = {
-                    "fingerprint": vfp,
-                    "file": str(dst),
-                    "target_duration": round(target, 3),
-                    "encoder": encoder,
-                    "sync": {k: round(v, 6) for k, v in metrics.items()},
-                }
-                checkpoint["selected_encoder"] = encoder
-                atomic_write_json(paths.checkpoint, checkpoint)
-            video_parts.append(dst)
-            self.progress(idx, len(segments), f"Video {idx}/{len(segments)}")
-
+            return {"audio": str(paths.voice), "plan": str(paths.plan), "final": None, "segments": len(timing)}
+        video_parts = [Path(result["dst"]) for result in pipeline_results]
         self.log("🔗 Smart Sync video parts concat...")
         concat_video_parts(self.ffmpeg, video_parts, paths.synced_video_noaudio, paths.work)
         self._log_sync_check(paths, segments, checkpoint)

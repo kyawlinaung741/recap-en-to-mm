@@ -63,6 +63,7 @@ def main() -> int:
             output_ratio=str(cfg.get("output_ratio", "16:9")),
             frame_fill=str(cfg.get("frame_fill", "blur")),
             video_quality=str(cfg.get("video_quality", "1080")),
+            gpu_render_mode=str(cfg.get("gpu_render_mode", "auto")),
             overlays=cfg.get("overlays") or {},
             log=log,
             progress=progress,

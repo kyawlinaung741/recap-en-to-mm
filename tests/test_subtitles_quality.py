@@ -106,6 +106,16 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(core._encoder_args("h264_nvenc"),
                          ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "19", "-b:v", "0"])
 
+    def test_dual_gpu_encoder_selection(self):
+        encoders = {"h264_nvenc", "h264_qsv"}
+        self.assertEqual(core.choose_gpu_encoders("nvidia", encoders), ("h264_nvenc",))
+        self.assertEqual(core.choose_gpu_encoders("intel", encoders), ("h264_qsv",))
+        self.assertEqual(core.choose_gpu_encoders("both", encoders), ("h264_nvenc", "h264_qsv"))
+        self.assertEqual([core.encoder_for_segment("both", i, encoders) for i in range(1, 5)],
+                         ["h264_nvenc", "h264_qsv", "h264_nvenc", "h264_qsv"])
+        self.assertEqual(core.encoder_for_segment("nvidia", 1, {"h264_qsv"}), "h264_qsv")
+        self.assertEqual(core.encoder_for_segment("intel", 1, set()), "libx264")
+
     def test_unknown_or_old_values_are_1080(self):
         for value in (None, "", "1080p", "4k", 1080):
             self.assertEqual(core.video_quality(value), "1080")

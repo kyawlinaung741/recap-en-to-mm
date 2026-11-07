@@ -376,7 +376,12 @@ the same; changing it re-renders only the video parts (translation and voice are
 `translation_batch_max_items` (40), `atomic_target_duration` / `atomic_max_duration` (4.2 / 5.6),
 `translation_audit` (true), `title_font_path`, `overlay_blur_strength` (18),
 `whisper_model_other` ("medium"; the Whisper model for languages other than English).
-
+`gpu_render_mode` controls Smart Sync video-part encoding: `auto` (best available), `nvidia`
+(GTX 1070 / `h264_nvenc`), `intel` (UHD 630 / `h264_qsv`), or `both`. In the UI this is the
+**GPU** combo under Ratio / Quality. **Both GPUs (alternate segments)** sends odd-numbered
+segments to NVIDIA and even-numbered segments to Intel; if one hardware encoder fails, only
+that segment falls back to CPU `libx264`. The final blur/title/logo/subtitle overlay uses the
+first selected hardware encoder and also has a CPU fallback.
 ### Tests
 `py -3.12 -m unittest discover -s tests` (offline; Gemini is mocked).
 

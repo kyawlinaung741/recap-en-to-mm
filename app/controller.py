@@ -50,6 +50,12 @@ PREVIEW_H = 360
 EDGE_VOICES = ("my-MM-ThihaNeural", "my-MM-NilarNeural")
 NARRATOR_VOICES = EDGE_VOICES + GEMINI_VOICES        # gemini_tts.py: one narrator voice for the whole video
 FILL_LABELS = {"blur": "Blur background", "black": "Black bars", "crop": "Crop to fill"}
+GPU_RENDER_LABELS = {
+    "auto": "Auto (best available)",
+    "nvidia": "NVIDIA GTX 1070 (NVENC)",
+    "intel": "Intel UHD 630 (QSV)",
+    "both": "Both GPUs (alternate segments)",
+}
 # Source language (2026-10-17): any language → Myanmar; Auto-detect asks Whisper which language the video speaks.
 LANGUAGE_LABELS = {"auto": "Auto-detect", **SOURCE_LANGUAGES}
 
@@ -174,6 +180,8 @@ class App(tk.Tk):
         self.output_ratio = tk.StringVar(value=saved_ratio if saved_ratio in OUTPUT_RATIOS else "16:9")
         self.frame_fill = tk.StringVar(value=FILL_LABELS.get(str(self.cfg.get("frame_fill") or "blur"), FILL_LABELS["blur"]))
         self.quality = tk.StringVar(value=QUALITY_LABELS[video_quality(self.cfg.get("video_quality"))])
+        saved_gpu_mode = str(self.cfg.get("gpu_render_mode") or "auto").lower()
+        self.gpu_render_mode = tk.StringVar(value=GPU_RENDER_LABELS.get(saved_gpu_mode, GPU_RENDER_LABELS["auto"]))
         self.source_size = (0, 0)
         self.smooth_freeze = tk.BooleanVar(value=bool(self.cfg.get("smooth_freeze_fallback", False)))
         self.max_freeze_hold = tk.StringVar(value=str(self.cfg.get("max_freeze_hold", 0.75)))
@@ -468,6 +476,14 @@ class App(tk.Tk):
                                      state="readonly", width=34)
         quality_combo.grid(row=1, column=1, columnspan=3, sticky="ew", pady=(6, 0))
         quality_combo.bind("<<ComboboxSelected>>", lambda _e: self._quality_changed())
+        ttk.Label(frame_row, text="GPU", width=9).grid(row=2, column=0, sticky="w", pady=(6, 0))
+        gpu_combo = ttk.Combobox(
+            frame_row, textvariable=self.gpu_render_mode,
+            values=tuple(GPU_RENDER_LABELS.values()), state="readonly", width=34,
+        )
+        gpu_combo.grid(row=2, column=1, columnspan=3, sticky="ew", pady=(6, 0))
+        ttk.Label(frame_row, text="Both GPUs = segment တစ်ခုစီကို NVIDIA / Intel အလှည့်ကျ render လုပ်မယ်",
+                  style="Muted.TLabel").grid(row=3, column=1, columnspan=3, sticky="w", pady=(2, 0))
 
         section(3, "Blur Watermark Area")
         blur_row = ttk.Frame(tools)
@@ -857,6 +873,9 @@ class App(tk.Tk):
     def _quality_code(self) -> str:
         return next((code for code, label in QUALITY_LABELS.items() if label == self.quality.get()), "1080")
 
+    def _gpu_render_code(self) -> str:
+        return next((code for code, label in GPU_RENDER_LABELS.items() if label == self.gpu_render_mode.get()), "auto")
+
     def _quality_changed(self) -> None:
         self.cfg["video_quality"] = self._quality_code()
         save_config(self.cfg)
@@ -1166,6 +1185,7 @@ class App(tk.Tk):
         self.cfg["short_pauses"] = bool(settings.get("short_pauses", True))
         self.cfg["output_ratio"] = settings["output_ratio"]
         self.cfg["video_quality"] = settings["video_quality"]
+        self.cfg["gpu_render_mode"] = settings.get("gpu_render_mode", "auto")
         self.cfg["frame_fill"] = settings["frame_fill"]
         self.cfg["logo_enabled"] = bool(settings["overlays"].get("logo_enabled", False))
         self.cfg["logo_path"] = settings["overlays"].get("logo_path", "") if self.cfg["logo_enabled"] else ""
@@ -1255,6 +1275,7 @@ class App(tk.Tk):
             "short_pauses": bool(self.short_pauses.get()),
             "output_ratio": self.output_ratio.get() if self.output_ratio.get() in OUTPUT_RATIOS else "16:9",
             "video_quality": self._quality_code(),
+            "gpu_render_mode": self._gpu_render_code(),
             "frame_fill": self._fill_code() if self._fill_code() in FRAME_FILLS else "blur",
             "zoom_factor": zoom,
             "render_final_video": True,
@@ -1515,6 +1536,7 @@ class App(tk.Tk):
             "short_pauses": bool(settings.get("short_pauses", True)),
             "output_ratio": settings.get("output_ratio", "16:9"),
             "video_quality": settings.get("video_quality", "1080"),
+            "gpu_render_mode": settings.get("gpu_render_mode", "auto"),
             "frame_fill": settings.get("frame_fill", "blur"),
             "gemini_env_path": settings.get("gemini_env_path", ""),
             "gemini_direction": settings.get("gemini_direction", ""),

@@ -542,6 +542,7 @@ _QSV_ARGS = {"1080": ["-preset", "medium", "-global_quality", "23"],
              "720": ["-preset", "faster", "-global_quality", "25"],
              "480": ["-preset", "veryfast", "-global_quality", "28"]}
 _HARDWARE_ENCODERS = {"h264_qsv", "h264_nvenc"}
+GPU_RENDER_MODES = {"auto", "nvidia", "intel", "both"}
 
 
 def video_quality(value: Any) -> str:
@@ -685,6 +686,29 @@ def ffmpeg_encoders(ffmpeg: str) -> set[str]:
         if len(fields) >= 2 and fields[0].startswith("V"):
             encoders.add(fields[1])
     return encoders
+
+
+def choose_gpu_encoders(mode: str, encoders: set[str]) -> tuple[str, ...]:
+    """Return usable H.264 encoders in the requested GPU order."""
+    requested = str(mode or "auto").strip().lower()
+    if requested not in GPU_RENDER_MODES:
+        requested = "auto"
+    nvidia = "h264_nvenc" if "h264_nvenc" in encoders else None
+    intel = "h264_qsv" if "h264_qsv" in encoders else None
+    if requested == "nvidia":
+        return (nvidia,) if nvidia else ((intel,) if intel else ("libx264",))
+    if requested == "intel":
+        return (intel,) if intel else ((nvidia,) if nvidia else ("libx264",))
+    if requested == "both":
+        selected = tuple(x for x in (nvidia, intel) if x)
+        return selected or ("libx264",)
+    return (intel or nvidia or "libx264",)
+
+
+def encoder_for_segment(mode: str, segment_index: int, encoders: set[str]) -> str:
+    """Choose one encoder for a 1-based segment index; Both alternates GPUs."""
+    choices = choose_gpu_encoders(mode, encoders)
+    return choices[(max(1, int(segment_index)) - 1) % len(choices)]
 
 
 def render_video_part(
@@ -1160,6 +1184,7 @@ class EdgeSmartSync:
         output_ratio: str = "16:9",
         frame_fill: str = "blur",
         video_quality: str = "1080",
+        gpu_render_mode: str = "auto",
         overlays: dict[str, Any] | None = None,
         log: LogFn = _noop,
         progress: Callable[[int, int, str], None] | None = None,
@@ -1182,6 +1207,9 @@ class EdgeSmartSync:
         self.output_ratio = output_ratio if output_ratio in OUTPUT_RATIOS else "16:9"
         self.frame_fill = frame_fill if frame_fill in FRAME_FILLS else "blur"
         self.video_quality = globals()["video_quality"](video_quality)
+        self.gpu_render_mode = str(gpu_render_mode or "auto").strip().lower()
+        if self.gpu_render_mode not in GPU_RENDER_MODES:
+            self.gpu_render_mode = "auto"
         self.smooth_freeze_fallback = bool(smooth_freeze_fallback)
         self.max_freeze_hold = max(0.15, min(float(max_freeze_hold), 1.50))
         self.render_final_video = bool(render_final_video)
@@ -1401,16 +1429,12 @@ class EdgeSmartSync:
 
         self.log("🎬 Smart Sync video parts render စမယ်...")
         encoders = ffmpeg_encoders(self.ffmpeg)
-        # Prefer Intel Quick Sync on this branch: it is verified working on the user's UHD 630.
-        preferred = next((name for name in ("h264_qsv", "h264_nvenc", "libx264") if name in encoders), "libx264")
-        remembered = str(checkpoint.get("selected_encoder") or "")
-        encoder = remembered if remembered in {"h264_qsv", "h264_nvenc", "libx264"} and remembered in encoders else preferred
-        encoder_label = {
-            "h264_qsv": "Intel Quick Sync Video (QSV)",
-            "h264_nvenc": "NVIDIA NVENC",
-            "libx264": "CPU / libx264",
-        }.get(encoder, encoder)
-        self.log(f"🎛️ Video encoder selected: {encoder} — {encoder_label}")
+        encoder_choices = choose_gpu_encoders(self.gpu_render_mode, encoders)
+        preferred = encoder_choices[0]
+        if self.gpu_render_mode == "both":
+            self.log("🎛️ GPU mode: Both GPUs — segments will alternate NVIDIA NVENC / Intel QSV")
+        else:
+            self.log(f"🎛️ GPU mode: {self.gpu_render_mode} — encoder={preferred}")
         video_parts: list[Path] = []
         # Cumulative frame lock: each part gets round(audio_end*30) - frames_so_far
         # frames, so video never drifts more than half a frame from the narration.
@@ -1426,6 +1450,7 @@ class EdgeSmartSync:
             audio_cursor += target
             frame_count = max(1, int(round(audio_cursor * 30)) - frames_done)
             frames_done += frame_count
+            segment_encoder = encoder_for_segment(self.gpu_render_mode, idx, encoders)
             vfp_raw = json.dumps({
                 "frame_count": frame_count,
                 "source": str(source.resolve()),
@@ -1434,7 +1459,7 @@ class EdgeSmartSync:
                 "target": target, "sync_mode": "hybrid_recap_distributed_freeze",
                 "max_speed": self.max_video_speed, "max_slow": self.max_video_slow,
                 "smooth_freeze": self.smooth_freeze_fallback, "max_freeze_hold": self.max_freeze_hold,
-                "mirror": self.mirror_video, "zoom": self.zoom_factor, "encoder": encoder,
+                "mirror": self.mirror_video, "zoom": self.zoom_factor, "encoder": segment_encoder,
                 "frame": [layout["ratio"], layout["fill"], layout["cw"], layout["ch"]],
                 # only a non-1080 quality is part of the key: parts made before the setting are reused
                 **({"quality": self.video_quality} if self.video_quality != "1080" else {}),
@@ -1446,26 +1471,22 @@ class EdgeSmartSync:
                 self.log(f"♻️ VIDEO [{idx}/{len(segments)}] {base}.mp4 reuse")
             else:
                 self.progress(idx - 1, len(segments), f"Smart Sync video {idx}/{len(segments)}")
-                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | encoder={encoder}")
+                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | encoder={segment_encoder}")
                 try:
                     metrics = render_video_part(
-                        self.ffmpeg, source, dst, seg, target, encoder,
+                        self.ffmpeg, source, dst, seg, target, segment_encoder,
                         self.mirror_video, self.zoom_factor,
                         self.max_video_speed, self.max_video_slow,
                         self.smooth_freeze_fallback, self.max_freeze_hold,
                         frame_count=frame_count, layout=layout, quality=self.video_quality,
                     )
                 except Exception:
-                    # If a hardware encoder fails on the first new part, fall back globally to CPU.
-                    if encoder in _HARDWARE_ENCODERS and not video_parts:
-                        self.log(f"⚠️ {encoder} မရပါ — libx264 CPU encoder ကို fallback လုပ်မယ်။")
-                        encoder = "libx264"
-                        # Encoder changed, invalidate any video checkpoint rows to avoid mixed codecs.
-                        checkpoint["video"] = {}
-                        for old in paths.video_parts.glob("*.mp4"):
-                            old.unlink(missing_ok=True)
+                    # Keep the other GPU available: only the failed segment falls back to CPU.
+                    if segment_encoder in _HARDWARE_ENCODERS:
+                        self.log(f"⚠️ {segment_encoder} မရပါ — ဒီ segment ကို libx264 CPU fallback လုပ်မယ်။")
+                        segment_encoder = "libx264"
                         metrics = render_video_part(
-                            self.ffmpeg, source, dst, seg, target, encoder,
+                            self.ffmpeg, source, dst, seg, target, segment_encoder,
                             self.mirror_video, self.zoom_factor,
                             self.max_video_speed, self.max_video_slow,
                             self.smooth_freeze_fallback, self.max_freeze_hold,
@@ -1480,7 +1501,7 @@ class EdgeSmartSync:
                             "target": target, "sync_mode": "hybrid_recap_distributed_freeze",
                             "max_speed": self.max_video_speed, "max_slow": self.max_video_slow,
                             "smooth_freeze": self.smooth_freeze_fallback, "max_freeze_hold": self.max_freeze_hold,
-                            "mirror": self.mirror_video, "zoom": self.zoom_factor, "encoder": encoder,
+                            "mirror": self.mirror_video, "zoom": self.zoom_factor, "encoder": segment_encoder,
                             "frame": [layout["ratio"], layout["fill"], layout["cw"], layout["ch"]],
                             **({"quality": self.video_quality} if self.video_quality != "1080" else {}),
                         }, sort_keys=True).encode()
@@ -1497,10 +1518,10 @@ class EdgeSmartSync:
                     "fingerprint": vfp,
                     "file": str(dst),
                     "target_duration": round(target, 3),
-                    "encoder": encoder,
+                    "encoder": segment_encoder,
                     "sync": {k: round(v, 6) for k, v in metrics.items()},
                 }
-                checkpoint["selected_encoder"] = encoder
+                checkpoint["selected_encoder"] = "mixed" if self.gpu_render_mode == "both" else segment_encoder
                 atomic_write_json(paths.checkpoint, checkpoint)
             video_parts.append(dst)
             self.progress(idx, len(segments), f"Video {idx}/{len(segments)}")
@@ -1508,6 +1529,10 @@ class EdgeSmartSync:
         self.log("🔗 Smart Sync video parts concat...")
         concat_video_parts(self.ffmpeg, video_parts, paths.synced_video_noaudio, paths.work)
         self._log_sync_check(paths, segments, checkpoint)
+        final_encoder = preferred
+        if final_encoder not in encoders:
+            final_encoder = "libx264"
+        self.log(f"🎨 Final overlay encoder: {final_encoder}")
         video_for_mux = paths.synced_video_noaudio
         render_overlays = dict(self.overlays)
         subtitle_style = render_overlays.get("subtitles") or {}
@@ -1526,7 +1551,7 @@ class EdgeSmartSync:
             self.log("🎨 Production overlay pass — Blur / Title PNG / Logo...")
             video_for_mux = apply_production_overlays(
                 self.ffmpeg, paths.synced_video_noaudio, paths.decorated_video_noaudio,
-                render_overlays, encoder, paths.work, self.log, frame_size=(layout["cw"], layout["ch"]),
+                render_overlays, final_encoder, paths.work, self.log, frame_size=(layout["cw"], layout["ch"]),
                 quality=self.video_quality,
             )
         self.log(f"🎧 {tts_label} audio mux...")

@@ -126,7 +126,8 @@ class EdgeTTSEngine:
         except Exception:
             edge_ver = "unknown"
         self.proxy = edge_proxy()
-        self.log(f"✅ Edge TTS READY — version={edge_ver}, rate={self.rate}, pitch={self.pitch}"
+        self.log(f"✅ Edge TTS READY — version={edge_ver}, rate={self.rate}, pitch={self.pitch}, "
+                 f"request timeout={self.request_timeout_seconds:.0f}s"
                  + (f" | proxy tries via {self.proxy}" if self.proxy else ""))
 
     @staticmethod

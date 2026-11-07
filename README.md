@@ -371,6 +371,16 @@ always written to `SRT_for_upload\` (not next to the video, where players would 
 20 s of video: 1080p 52 s, 720p 9 s, 480p 3.6 s. Title, logo, text and subtitle sizes are scaled so the look is
 the same; changing it re-renders only the video parts (translation and voice are kept). Splitter has it too.
 
+### Parallel TTS + video rendering
+On the `gpu-cpu-parallel-pipeline` branch, Smart Sync uses a bounded producer/consumer pipeline. The CPU-side TTS
+producer creates one narration segment at a time, while a single FFmpeg video consumer renders completed segments
+as soon as they are ready. The queue is bounded (`max_pending=2`), so a long job cannot grow without limit in RAM or
+on disk. Results remain in original segment order, and existing audio/video checkpoint entries can still be reused.
+STOP requests and consumer errors are propagated back to the main worker; final audio concatenation, video
+concatenation, subtitle timing and muxing happen only after the pipeline has completed. This integration must still be
+validated with a real Windows run using the custom FFmpeg build and the user's GPUs; the unit tests do not replace
+that live test.
+
 ### Advanced (`config.json`, created on the first START)
 `ffmpeg_path`, `ffprobe_path`, `python_path`, `max_video_speed` (1.25),
 `translation_batch_max_items` (40), `atomic_target_duration` / `atomic_max_duration` (4.2 / 5.6),

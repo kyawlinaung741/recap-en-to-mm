@@ -64,6 +64,7 @@ def whisper_choice(language: str, other_model: str = WHISPER_MODEL_OTHER) -> tup
 # included as lower-cost fallback options; TTS/image-only model IDs do not belong here.
 GEMINI_MODEL_FALLBACK_CHAIN = [
     "gemini-3.8-flash",
+    "gemini-4-argon",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
@@ -1036,13 +1037,15 @@ def _extract_json_payload(raw_text: str) -> Any:
 _STORY_CONTEXT_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
-        "characters": {"type": "ARRAY"},
-        "relationships": {"type": "ARRAY"},
-        "places": {"type": "ARRAY"},
-        "terms": {"type": "ARRAY"},
-        "plot_state": {"type": "ARRAY"},
-        "name_consistency": {"type": "ARRAY"},
-        "unresolved": {"type": "ARRAY"},
+        # Gemini structured output requires an explicit item schema for every array.
+        # These memory collections are plain text and are carried forward as context.
+        "characters": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "relationships": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "places": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "terms": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "plot_state": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "name_consistency": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "unresolved": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
     "required": [
         "characters", "relationships", "places", "terms",

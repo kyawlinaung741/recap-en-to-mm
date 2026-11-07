@@ -101,6 +101,7 @@ class EdgeTTSEngine:
         "NO_PROXY", "no_proxy",
     )
     _env_lock = threading.Lock()
+    DEFAULT_REQUEST_TIMEOUT_SECONDS = 45.0
 
     def __init__(self, *, ffmpeg: str, work_dir: Path, rate: str = "+0%", pitch: str = "+0Hz", log: LogFn = _noop) -> None:
         import importlib.util
@@ -112,6 +113,11 @@ class EdgeTTSEngine:
         self.rate = str(rate or "+0%").strip()
         self.pitch = str(pitch or "+0Hz").strip()
         self.log = log
+        try:
+            requested_timeout = float(os.getenv("EDGE_TTS_TIMEOUT_SECONDS", self.DEFAULT_REQUEST_TIMEOUT_SECONDS))
+        except (TypeError, ValueError):
+            requested_timeout = self.DEFAULT_REQUEST_TIMEOUT_SECONDS
+        self.request_timeout_seconds = max(10.0, min(180.0, requested_timeout))
         self.VOICE_DATABASE: dict[str, dict[str, Any]] = {}
         self._counter = 0
         try:
@@ -146,7 +152,15 @@ class EdgeTTSEngine:
             pitch=self.pitch,
             proxy=proxy,
         )
-        await communicate.save(str(mp3))
+        try:
+            await asyncio.wait_for(
+                communicate.save(str(mp3)),
+                timeout=self.request_timeout_seconds,
+            )
+        except asyncio.TimeoutError as exc:
+            raise TimeoutError(
+                f"Edge TTS WebSocket request timed out after {self.request_timeout_seconds:.0f}s."
+            ) from exc
 
     def _synthesize_once(self, text: str, voice: str, mp3: Path, *, direct: bool) -> None:
         # edge_tts/aiohttp respects environment/system proxy settings. Some
@@ -192,7 +206,7 @@ class EdgeTTSEngine:
             try:
                 self.log(
                     f"🌐 Edge TTS request {attempt}/{len(routes)} — {route_name} route | "
-                    f"voice={voice} | chars={len(clean_text)}"
+                    f"voice={voice} | chars={len(clean_text)} | timeout={self.request_timeout_seconds:.0f}s"
                 )
                 self._synthesize_once(clean_text, voice, mp3, direct=direct)
                 if not mp3.is_file() or mp3.stat().st_size < 256:
@@ -203,7 +217,10 @@ class EdgeTTSEngine:
             except Exception as exc:
                 name = type(exc).__name__
                 msg = str(exc).strip()
+                if not msg:
+                    msg = "request timed out or was cancelled"
                 errors.append(f"{route_name}#{attempt}: {name}: {msg}")
+                mp3.unlink(missing_ok=True)
                 self.log(f"⚠️ Edge TTS {route_name} attempt {attempt}/{len(routes)} failed: {name}: {msg}")
         else:
             preview = clean_text[:160].replace("\n", " ")
@@ -687,6 +704,14 @@ def ffmpeg_encoders(ffmpeg: str) -> set[str]:
     return encoders
 
 
+def _render_timeout_seconds(target_duration: float, encoder: str) -> float:
+    """Bound a segment render while allowing slower CPU fallback enough time."""
+    duration = max(0.1, float(target_duration))
+    if encoder in _HARDWARE_ENCODERS:
+        return max(90.0, min(300.0, 60.0 + duration * 12.0))
+    return max(180.0, min(900.0, 120.0 + duration * 30.0))
+
+
 def render_video_part(
     ffmpeg: str,
     source: Path,
@@ -703,6 +728,7 @@ def render_video_part(
     frame_count: int | None = None,
     layout: dict[str, Any] | None = None,
     quality: str = "1080",
+    timeout_seconds: float | None = None,
 ) -> dict[str, float]:
     """frame_count (when given) locks the part to exactly that many 30 fps frames.
     layout (frame_layout) is the output ratio / fill; None = the original 16:9 fill.
@@ -764,9 +790,24 @@ def render_video_part(
             "-movflags", "+faststart", str(output),
         ]
 
-    result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    timeout = float(timeout_seconds or _render_timeout_seconds(target_duration, encoder))
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        output.unlink(missing_ok=True)
+        raise TimeoutError(
+            f"Video segment render timed out ({encoder}) after {timeout:.0f}s; "
+            "incomplete output removed."
+        ) from exc
     if result.returncode != 0:
+        output.unlink(missing_ok=True)
         raise RuntimeError(f"Video segment render failed ({encoder}):\n{result.stderr[-4000:]}")
+    if not output.is_file() or output.stat().st_size == 0:
+        output.unlink(missing_ok=True)
+        raise RuntimeError(f"Video segment render ({encoder}) returned success but produced no output file.")
     return metrics
 
 def concat_video_parts(ffmpeg: str, parts: list[Path], output: Path, work_dir: Path) -> None:
@@ -1392,7 +1433,10 @@ class EdgeSmartSync:
                 metrics = rec.get("sync") or {}
             else:
                 self.progress(idx - 1, len(segments), f"Smart Sync video {idx}/{len(segments)}")
-                self.log(f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | encoder={encoder}")
+                self.log(
+                    f"🎞️ VIDEO [{idx}/{len(segments)}] {base} → {target:.2f}s | "
+                    f"encoder={encoder} | timeout={_render_timeout_seconds(target, encoder):.0f}s"
+                )
                 actual_encoder = encoder
                 try:
                     metrics = render_video_part(
@@ -1400,16 +1444,21 @@ class EdgeSmartSync:
                         self.mirror_video, self.zoom_factor, self.max_video_speed, self.max_video_slow,
                         self.smooth_freeze_fallback, self.max_freeze_hold,
                         frame_count=frame_count, layout=layout, quality=self.video_quality,
+                        timeout_seconds=_render_timeout_seconds(target, actual_encoder),
                     )
-                except Exception:
+                except Exception as render_error:
                     if encoder in _HARDWARE_ENCODERS:
-                        self.log(f"⚠️ {encoder} မရပါ — libx264 CPU encoder ကို ဒီ segment အတွက် fallback လုပ်မယ်။")
+                        self.log(
+                            f"⚠️ {encoder} render မအောင်မြင်ပါ ({str(render_error)[:240]}) — "
+                            f"libx264 CPU fallback စမယ် | timeout={_render_timeout_seconds(target, 'libx264'):.0f}s"
+                        )
                         actual_encoder = "libx264"
                         metrics = render_video_part(
                             self.ffmpeg, source, dst, seg, target, actual_encoder,
                             self.mirror_video, self.zoom_factor, self.max_video_speed, self.max_video_slow,
                             self.smooth_freeze_fallback, self.max_freeze_hold,
                             frame_count=frame_count, layout=layout, quality=self.video_quality,
+                            timeout_seconds=_render_timeout_seconds(target, actual_encoder),
                         )
                         vfp_raw = vfp_raw.replace(f'"encoder": "{encoder}"'.encode(), f'"encoder": "{actual_encoder}"'.encode())
                         vfp = hashlib.sha256(vfp_raw).hexdigest()

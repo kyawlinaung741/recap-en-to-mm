@@ -18,6 +18,38 @@ import core
 
 
 class EdgeTtsTimeoutTests(unittest.TestCase):
+    def test_timeout_failure_retries_next_route_and_can_recover(self):
+        with tempfile.TemporaryDirectory() as td:
+            engine = object.__new__(core.EdgeTTSEngine)
+            engine.work_dir = Path(td)
+            engine.rate = "+0%"
+            engine.pitch = "+0Hz"
+            engine.request_timeout_seconds = 0.01
+            engine.proxy = None
+            engine.ffmpeg = "ffmpeg"
+            engine.log = lambda _message: None
+            engine._counter = 0
+            attempts = []
+
+            def synthesize(_text, _voice, mp3, *, direct):
+                attempts.append(direct)
+                if len(attempts) < 3:
+                    raise TimeoutError("simulated Edge TTS timeout")
+                mp3.write_bytes(b"x" * 300)
+
+            def convert(cmd, **_kwargs):
+                Path(cmd[-1]).write_bytes(b"wav-data")
+                return SimpleNamespace(returncode=0, stderr="")
+
+            with mock.patch.object(engine, "_synthesize_once", side_effect=synthesize), \
+                 mock.patch.object(core.subprocess, "run", side_effect=convert), \
+                 mock.patch.object(core.time, "sleep"):
+                result = engine.generate_channel99_voice("hello there", "en-US-AriaNeural")
+
+            self.assertEqual(len(attempts), 3)
+            self.assertEqual(attempts, [True, True, False])
+            self.assertTrue(Path(result).is_file())
+
     def test_websocket_save_is_cancelled_at_timeout(self):
         class SlowCommunicate:
             def __init__(self, *args, **kwargs):

@@ -2155,6 +2155,64 @@ class RecapPlanBuilder:
                         log=self.log,
                     )
                 translated = _drop_foreign_letters(translated, self.log)
+
+                # A translation can pass Gemini's first validation, then become
+                # punctuation-only when unsupported foreign-script characters are
+                # stripped. Repair only those affected IDs before checkpointing;
+                # never send an empty/punctuation-only line to TTS or discard it.
+                source_by_id = {int(item["id"]): item for item in batch}
+                for row_index, row in enumerate(translated):
+                    if _has_speakable_content(row.get("translation")):
+                        continue
+                    uid = int(row["id"])
+                    source_row = source_by_id.get(uid)
+                    if source_row is None or not _has_speakable_content(source_row.get("source_text")):
+                        raise RuntimeError(
+                            f"Invalid non-speech translation for ID {uid}: "
+                            f"{_clean(row.get('translation'))!r}; source row is unavailable for repair."
+                        )
+                    self.log(
+                        f"🔁 Translation recovery — ID {uid:05d} became non-speech after "
+                        "foreign-script cleanup; regenerating this ID only"
+                    )
+                    repaired = False
+                    for repair_attempt in range(1, 3):
+                        repair_prev = (translated_all + translated[:row_index])[-self.context_overlap:] if self.context_overlap else []
+                        repair_next = (translated[row_index + 1:] + nxt)[:self.lookahead] if self.lookahead else []
+                        try:
+                            one = translate_batch(
+                                ai,
+                                story_context=story_context,
+                                previous_context=repair_prev,
+                                current=[source_row],
+                                next_context=repair_next,
+                                log=self.log,
+                                source_language=language_name,
+                            )
+                            one = _drop_foreign_letters(one, self.log)
+                            candidate = _sanitize_translation_text(one[0].get("translation"))
+                            if not _has_speakable_content(candidate):
+                                raise ValueError(
+                                    f"ID {uid} still has no speakable content after cleanup: {candidate!r}"
+                                )
+                            translated[row_index] = {**row, "translation": candidate}
+                            self.log(f"✅ Translation recovery — ID {uid:05d} regenerated successfully")
+                            repaired = True
+                            break
+                        except GeminiKeyPoolExhaustedError:
+                            raise
+                        except Exception as repair_exc:
+                            self.log(
+                                f"⚠️ Translation recovery ID {uid:05d} "
+                                f"attempt {repair_attempt}/2 failed: {repair_exc}"
+                            )
+                    if not repaired:
+                        raise RuntimeError(
+                            f"Translation recovery failed for ID {uid:05d}; "
+                            "Gemini returned no speakable Burmese narration after two repair attempts. "
+                            "The job stopped safely before TTS."
+                        )
+
                 for row in translated:
                     if _latin_words(row.get("translation")):
                         self.log(f"⚠️ ID {int(row['id']):05d}: English words kept ({', '.join(_latin_words(row['translation']))}); "

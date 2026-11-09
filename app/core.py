@@ -316,6 +316,24 @@ def spoken_text(text: str) -> str:
         return re.sub(r"\s+", " ", bare).strip()
     return value
 
+_GRADE_PRONUNCIATIONS = {
+    "SS": "အက်စ်အက်စ်",
+    "S": "အက်စ်",
+    "A": "အေ",
+    "B": "ဘီ",
+    "C": "စီ",
+}
+
+
+def normalize_grade_pronunciation(text: str) -> str:
+    """Expand standalone grade letters before TTS; keep subtitle/source text unchanged."""
+    value = str(text or "")
+    grade_pattern = re.compile(
+        r"(?<![A-Za-z])(?:SS|S|A|B|C)(?![A-Za-z])(?=\\s*အဆင့်)"
+    )
+    return grade_pattern.sub(lambda match: _GRADE_PRONUNCIATIONS[match.group(0)], value)
+
+
 
 def without_english(text: str) -> str:
     """Last try for a line Edge TTS gave no audio for: the English words left out."""
@@ -1348,7 +1366,7 @@ class EdgeSmartSync:
             else:
                 self.progress(idx - 1, len(segments), f"{tts_label} {idx}/{len(segments)}")
                 self.log(f"🗣️ [{idx}/{len(segments)}] {base} generate via {tts_label}")
-                speak = spoken_text(seg["narration"])
+                speak = normalize_grade_pronunciation(spoken_text(seg["narration"]))
                 try:
                     try:
                         produced = engine.generate_channel99_voice(speak, self.voice)

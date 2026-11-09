@@ -329,7 +329,7 @@ def normalize_grade_pronunciation(text: str) -> str:
     """Expand standalone grade letters before TTS; keep subtitle/source text unchanged."""
     value = str(text or "")
     grade_pattern = re.compile(
-        r"(?<![A-Za-z])(?:SS|S|A|B|C)(?![A-Za-z])(?=\\s*အဆင့်)"
+        r"(?<![A-Za-z])(?:SS|S|A|B|C)(?![A-Za-z])(?=\s*အဆင့်)"
     )
     return grade_pattern.sub(lambda match: _GRADE_PRONUNCIATIONS[match.group(0)], value)
 

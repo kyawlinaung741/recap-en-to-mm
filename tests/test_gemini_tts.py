@@ -21,12 +21,14 @@ def env_file(tmp: str, text: str) -> str:
 
 
 class PromptTests(unittest.TestCase):
-    def test_every_line_gets_the_same_narrator(self):
+    def test_every_line_gets_the_same_dub_voice(self):
         a = gemini_tts.narrator_prompt("ပထမ စာကြောင်း။", "gemini:Charon")
         b = gemini_tts.narrator_prompt("ဒုတိယ (Zombie) စာကြောင်း။", "gemini:Charon")
         self.assertEqual(a.split("TRANSCRIPT:")[0], b.split("TRANSCRIPT:")[0])     # identical direction
-        self.assertIn("ONE CONTINUOUS NARRATOR", a)
-        self.assertIn("Never impersonate a character, change gender or become a second speaker", a)
+        self.assertIn("CONSISTENT BURMESE DUB VOICE", a)
+        self.assertIn("NOT a recap storyteller", a)
+        self.assertIn("Do not introduce a second speaker", a)
+        self.assertIn("pronounce every Burmese word and syllable clearly", a)
         self.assertIn("ONE adult male Burmese narrator", a)
         self.assertNotIn("Zombie", b)                                                  # glosses are not read
         self.assertIn("ONE adult female", gemini_tts.narrator_prompt("x", "gemini:Kore"))

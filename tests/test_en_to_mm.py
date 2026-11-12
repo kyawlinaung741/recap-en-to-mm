@@ -40,11 +40,11 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
             out = rp.translate_batch(None, story_context={}, previous_context=[], current=[_unit(1, 0.0, 2.0, "He came home.")],
                                      next_context=[], log=lambda _m: None)
         self.assertEqual(out[0]["translation"], "သူ အိမ်ပြန်လာခဲ့တယ်။")
-        self.assertIn("BURMESE DUB TRANSLATOR", prompts[0])
+        self.assertIn("BURMESE NARRATION TRANSLATOR", prompts[0])
         self.assertIn("Translate ONLY the CURRENT source items", prompts[0])
-        self.assertIn("NOT a recap, summary, retelling", prompts[0])
+        self.assertIn("movie/story narrator", prompts[0])
         self.assertIn("A အဆင့် → အေ အဆင့်", prompts[0])
-        self.assertIn("subtitle text and spoken text use this same", prompts[0])
+        self.assertIn("stable phonetic name dictionary", prompts[0])
 
     def test_english_words_are_reasked_and_never_returned(self):
         answers = [
@@ -85,6 +85,15 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         self.assertEqual(out[0]["translation"], "ဧည့်ခန်းထဲမှာ မီးခိုးတွေ")
         self.assertIn("letters of another script", prompts[1])
         self.assertEqual(rp._foreign_letters("ဧည့်ခန်း (living room)"), [])
+
+    def test_spoken_text_normalization_converts_numbers_percent_and_ampersand(self):
+        self.assertEqual(
+            rp._normalize_spoken_burmese("၂၀၂၅"), "၂၀၂၅"
+        )
+        self.assertEqual(
+            rp._normalize_spoken_burmese("2025 ခုနှစ်မှာ 50% အောင်မြင်ပြီး A & B"),
+            "နှစ်ထောင် နှစ်ဆယ့်ငါး ခုနှစ်မှာ ငါးဆယ် ရာခိုင်နှုန်း အောင်မြင်ပြီး အေ နှင့် ဘီ",
+        )
 
     def test_plan_covers_the_whole_video_with_midpoint_boundaries(self):
         units = [dict(_unit(1, 1.0, 3.0, "One."), translation="တစ်။"),

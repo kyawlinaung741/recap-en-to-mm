@@ -295,6 +295,7 @@ class App(tk.Tk):
         ttk.Label(source_bar, text="Gemini .env").grid(row=0, column=3, sticky="w", padx=(0, 8))
         ttk.Entry(source_bar, textvariable=self.gemini_env).grid(row=0, column=4, sticky="ew")
         ttk.Button(source_bar, text="Browse", style="Compact.TButton", command=self._browse_env).grid(row=0, column=5, padx=(6, 0))
+        ttk.Button(source_bar, text="API Keys", style="Compact.TButton", command=self._manage_gemini_keys).grid(row=0, column=6, padx=(6, 0))
         ttk.Label(source_bar, text="Save final to").grid(row=1, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
         ttk.Entry(source_bar, textvariable=self.final_folder).grid(row=1, column=1, sticky="ew", pady=(6, 0))
         ttk.Button(source_bar, text="Browse", style="Compact.TButton", command=self._browse_final_folder).grid(
@@ -1070,6 +1071,89 @@ class App(tk.Tk):
         p = filedialog.askopenfilename(title="Select .env containing GEMINI_API_KEY", initialdir=initial, filetypes=[("ENV", ".env"), ("All", "*.*")])
         if p:
             self.gemini_env.set(p)
+
+    def _manage_gemini_keys(self) -> None:
+        """Edit three local Gemini project keys without manually editing .env."""
+        env_path = Path(self.gemini_env.get().strip() or (ROOT_DIR / ".env")).expanduser()
+        try:
+            existing_lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
+        except Exception as exc:
+            messagebox.showerror("Gemini API Keys", f".env ဖိုင်ဖတ်မရပါ။\n{exc}")
+            return
+
+        key_names = [f"GEMINI_IMAGE_PROJECT_{i}_KEY" for i in range(1, 4)]
+        current: dict[str, str] = {}
+        for line in existing_lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            name, value = stripped.split("=", 1)
+            name = name.strip()
+            if name in key_names:
+                current[name] = value.strip().strip('"').strip("'")
+
+        dialog = tk.Toplevel(self)
+        dialog.title("Gemini API Keys")
+        dialog.configure(bg=BG)
+        dialog.transient(self)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+        body = ttk.Frame(dialog, padding=16)
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text="Gemini API Key ၃ ခု ထည့်ရန်", font=("Segoe UI Semibold", 12)).grid(
+            row=0, column=0, columnspan=2, sticky="w", pady=(0, 6))
+        ttk.Label(body, text="Google AI Studio မှ ရထားတဲ့ Key တွေကို အကွက်တစ်ခုစီမှာ ကူးထည့်ပါ။",
+                  style="Muted.TLabel", wraplength=460).grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 12))
+
+        variables: list[tk.StringVar] = []
+        for index, key_name in enumerate(key_names, 1):
+            ttk.Label(body, text=f"API Key {index}").grid(row=index + 1, column=0, sticky="w", padx=(0, 12), pady=5)
+            variable = tk.StringVar(value=current.get(key_name, ""))
+            variables.append(variable)
+            ttk.Entry(body, textvariable=variable, width=58, show="*").grid(
+                row=index + 1, column=1, sticky="ew", pady=5)
+
+        ttk.Label(body, text="အကွက်ဗလာထားရင် အဲဒီ Key ကို .env မှ ဖယ်ရှားပါမယ်။\n"
+                             "Save နှိပ်တာနဲ့ သိမ်းပြီး နောက်တစ်ကြိမ် START မှာ အလိုအလျောက် အသုံးပြုပါမယ်။",
+                  style="Muted.TLabel", wraplength=460, justify="left").grid(
+            row=5, column=0, columnspan=2, sticky="w", pady=(10, 12))
+
+        def save_keys() -> None:
+            values = {name: variable.get().strip() for name, variable in zip(key_names, variables)}
+            preserved = []
+            for line in existing_lines:
+                stripped = line.strip()
+                if any(stripped.startswith(name + "=") for name in key_names):
+                    continue
+                preserved.append(line)
+            while preserved and not preserved[-1].strip():
+                preserved.pop()
+            for name, value in values.items():
+                if value:
+                    preserved.append(f"{name}={value}")
+            try:
+                env_path.parent.mkdir(parents=True, exist_ok=True)
+                env_path.write_text("\n".join(preserved) + ("\n" if preserved else ""), encoding="utf-8")
+                self.gemini_env.set(str(env_path))
+                self.cfg["gemini_env_path"] = str(env_path)
+                save_config(self.cfg)
+            except Exception as exc:
+                messagebox.showerror("Gemini API Keys", f"Key တွေ သိမ်းမရပါ။\n{exc}", parent=dialog)
+                return
+            dialog.destroy()
+            messagebox.showinfo(
+                "Gemini API Keys",
+                f"Key {sum(bool(value) for value in values.values())} ခုကို သိမ်းပြီးပါပြီ။\n"
+                "နောက်တစ်ကြိမ် START / RESUME နှိပ်တဲ့အခါ အသုံးပြုပါမယ်။",
+                parent=self,
+            )
+
+        buttons = ttk.Frame(body)
+        buttons.grid(row=6, column=0, columnspan=2, sticky="e")
+        ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=(6, 0))
+        ttk.Button(buttons, text="Save Keys", style="Accent.TButton", command=save_keys).pack(side="right")
+        dialog.update_idletasks()
+        dialog.geometry(f"+{self.winfo_rootx() + 160}+{self.winfo_rooty() + 120}")
 
     def _clear_batch(self) -> None:
         if self.batch_files:

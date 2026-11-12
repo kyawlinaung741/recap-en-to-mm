@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[int, int, str], None]
-PLANNER_MODE = "timestamp_translation_en_to_mm_direct_dub_v2"
+PLANNER_MODE = "timestamp_translation_en_to_mm_direct_dub_v3"
 TRANSLATION_DIRECTION = "en_to_mm"   # an English video's direction; others are "<code>_to_mm" (2026-10-17)
 # Whole-sentence lines like VOXCPM recap (2026-10-12): a line ends at a sentence end (or a clause after 6.5 s,
 # a breath after 10 s, at most 24 s). The old 4-6 s lines cut 20-35% of sentences in two, and Gemini then told a
@@ -63,10 +63,13 @@ def whisper_choice(language: str, other_model: str = WHISPER_MODEL_OTHER) -> tup
 # Stable Gemini text models, newest/highest-priority first. Flash-Lite models are
 # included as lower-cost fallback options; TTS/image-only model IDs do not belong here.
 GEMINI_MODEL_FALLBACK_CHAIN = [
+    "gemini-4-carbon",
+    "gemini-4-argon",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
     "gemini-3.1-flash-lite",
 ]
 
@@ -1411,7 +1414,7 @@ CRITICAL OUTPUT ID PROTOCOL:
 - Before responding, verify that items[].id exactly equals that sequence.
 """
     last: Exception | None = None
-    for attempt in range(1, 4):
+    for attempt in range(1, 5):
         try:
             payload = _gemini_json(
                 ai, prompt, retries=1, log=log, response_schema=_TRANSLATION_RESPONSE_SCHEMA
@@ -1420,7 +1423,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             _assert_no_adjacent_translation_duplicates(translated, previous_context)
             stray = [f"ID {int(x['id']):05d}: {' '.join(_foreign_letters(x['translation']))}"
                      for x in translated if _foreign_letters(x["translation"])]
-            if stray and attempt < 3:  # the last answer is kept; build() drops the letters and logs the line
+            if stray and attempt < 4:
                 raise ValueError("letters of another script inside the Burmese (" + "; ".join(stray) +
                                  "); write every word in Burmese script")
             english = [f"ID {int(x['id']):05d}: {', '.join(_latin_words(x['translation']))}"
@@ -1429,7 +1432,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             repeats = find_repeated_next_lines(translated, previous_context)
             twice = find_near_duplicates(translated, previous_context)
             slid = _slid_runs(translated, next_context[0].get("source_text") if next_context else None)
-            if (english or notes or repeats or twice or slid) and attempt < 3:   # the last answer is kept
+            if (english or notes or repeats or twice or slid) and attempt < 4:
                 problems = []
                 if english:
                     problems.append("English words inside the Burmese (" + "; ".join(english[:10]) + "): write them "
@@ -1450,12 +1453,14 @@ CRITICAL OUTPUT ID PROTOCOL:
                     problems.append("lines slid one ID early (" + ", ".join(f"IDs {a:05d}-{b:05d}" for a, b in slid)
                                     + " each say the NEXT ID's source words): every ID translates its own source line")
                 raise ValueError("; ".join(problems))
+            if english:
+                raise ValueError("English/Latin words remain after 4 translation attempts; refusing to save a line that the Myanmar TTS voice may not pronounce: " + "; ".join(english[:10]))
             return translated
         except GeminiKeyPoolExhaustedError:
             raise
         except Exception as exc:
             last = exc
-            log(f"⚠️ Translation validation attempt {attempt}/3 failed: {exc}")
+            log(f"⚠️ Translation validation attempt {attempt}/4 failed: {exc}")
             exact_ids = [int(x["id"]) for x in current]
             prompt += (
                 f"\n\nCORRECTION REQUIRED: Previous response was invalid because: {exc}. "
@@ -2170,11 +2175,26 @@ class RecapPlanBuilder:
                         next_context=nxt,
                         log=self.log,
                     )
+                # The audit may rewrite a line. Re-run any such row through the strict
+                # translator before it reaches the checkpoint or Myanmar TTS.
+                english_rows = [row for row in translated if _latin_words(row.get("translation"))]
+                if english_rows:
+                    ids = ", ".join(f"{int(row['id']):05d}" for row in english_rows)
+                    self.log(f"🔁 Re-translating {len(english_rows)} audit line(s) containing English: {ids}")
+                    repaired_rows = translate_batch(
+                        ai, story_context=story_context, previous_context=prev,
+                        current=english_rows, next_context=nxt, log=self.log,
+                        source_language=language_name,
+                    )
+                    repaired_by_id = {int(row["id"]): row for row in repaired_rows}
+                    translated = [repaired_by_id.get(int(row["id"]), row) for row in translated]
+                remaining_english = [
+                    f"ID {int(row['id']):05d}: {', '.join(_latin_words(row.get('translation')))}"
+                    for row in translated if _latin_words(row.get("translation"))
+                ]
+                if remaining_english:
+                    raise RuntimeError("English words remain after translation audit; refusing to send incomplete Burmese text to TTS: " + "; ".join(remaining_english[:10]))
                 translated = _drop_foreign_letters(translated, self.log)
-                for row in translated:
-                    if _latin_words(row.get("translation")):
-                        self.log(f"⚠️ ID {int(row['id']):05d}: English words kept ({', '.join(_latin_words(row['translation']))}); "
-                                 "Edit Text can fix the line")
                 for a, b in find_repeated_next_lines(translated, translated_all[-1:]) + find_near_duplicates(translated, translated_all[-2:]):
                     self.log(f"⚠️ IDs {a:05d}/{b:05d} may say the same thing twice; Edit Text can fix the lines")
                 translated_all.extend(translated)

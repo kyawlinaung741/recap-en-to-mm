@@ -39,6 +39,12 @@ class PromptTests(unittest.TestCase):
 
 
 class EngineTests(unittest.TestCase):
+    def test_current_gemini_tts_models_are_first(self):
+        self.assertEqual(
+            gemini_tts.TTS_MODELS[:2],
+            ("gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"),
+        )
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.env = env_file(self.tmp.name, "GEMINI_IMAGE_PROJECT_1_KEY=a\nGEMINI_IMAGE_PROJECT_2_KEY=b\n")
@@ -84,6 +90,12 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(eng._ask("p", "Charon"), b"pcm")
             self.assertEqual(eng._ask("p", "Charon"), b"pcm")
         self.assertEqual([c[0] for c in calls], ["a", "b", "b"])      # key a not asked again after its 429
+
+    def test_rejects_invalid_short_audio_payload(self):
+        eng = self.engine()
+        with mock.patch.object(eng, "_ask", return_value=b"bad"):
+            with self.assertRaises(gemini_tts.GeminiTTSError):
+                eng.generate_channel99_voice("မင်္ဂလာပါ။", "gemini:Charon")
 
     def test_no_keys(self):
         import os

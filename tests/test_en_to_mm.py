@@ -46,6 +46,29 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         self.assertIn("A အဆင့် → အေ အဆင့်", prompts[0])
         self.assertIn("subtitle text and spoken text use this same", prompts[0])
 
+    def test_english_words_are_reasked_and_never_returned(self):
+        answers = [
+            {"items": [{"id": 1, "translation": "ဧည့်ခန်းထဲမှာ မီးခိုးတွေရှိတယ်။ living room"}]},
+            {"items": [{"id": 1, "translation": "ဧည့်ခန်းထဲမှာ မီးခိုးတွေရှိတယ်။ smoke"}]},
+            {"items": [{"id": 1, "translation": "ဧည့်ခန်းထဲမှာ မီးခိုးတွေရှိတယ်။ room"}]},
+            {"items": [{"id": 1, "translation": "ဧည့်ခန်းထဲမှာ မီးခိုးတွေရှိတယ်။"}]},
+        ]
+        prompts = []
+
+        def answer(_ai, prompt, **_kw):
+            prompts.append(prompt)
+            return answers[len(prompts) - 1]
+
+        with mock.patch.object(rp, "_gemini_json", answer):
+            out = rp.translate_batch(
+                None, story_context={}, previous_context=[],
+                current=[_unit(1, 0.0, 2.0, "The living room was full of smoke.")],
+                next_context=[], log=lambda _m: None,
+            )
+        self.assertEqual(len(prompts), 4)
+        self.assertEqual(out[0]["translation"], "ဧည့်ခန်းထဲမှာ မီးခိုးတွေရှိတယ်။")
+        self.assertEqual(rp._latin_words(out[0]["translation"]), [])
+
     def test_letters_of_another_script_are_asked_again(self):
         answers = [{"items": [{"id": 1, "translation": "მისခန်းထဲမှာ မီးခိုးတွေ"}]},
                    {"items": [{"id": 1, "translation": "ဧည့်ခန်းထဲမှာ မီးခိုးတွေ"}]}]

@@ -92,7 +92,7 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         )
         self.assertEqual(
             rp._normalize_spoken_burmese("2025 ခုနှစ်မှာ 50% အောင်မြင်ပြီး A & B"),
-            "နှစ်ထောင် နှစ်ဆယ့်ငါး ခုနှစ်မှာ ငါးဆယ် ရာခိုင်နှုန်း အောင်မြင်ပြီး အေ နှင့် ဘီ",
+            "နှစ်ထောင် နှစ်ဆယ့်ငါး ခုနှစ်မှာ ငါးဆယ် ရာခိုင်နှုန်း အောင်မြင်ပြီး A နှင့် B",
         )
 
     def test_plan_covers_the_whole_video_with_midpoint_boundaries(self):

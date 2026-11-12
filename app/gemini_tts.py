@@ -26,8 +26,8 @@ VOICES = [("Charon", "male"), ("Algenib", "male"), ("Orus", "male"), ("Iapetus",
 GEMINI_VOICES = tuple(f"gemini:{name}" for name, _gender in VOICES)
 TTS_MODELS = ("gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")
 PROFILE_VERSION = "single_narrator_v2"
-DEFAULT_DIRECTION = ("Warm, clear Burmese storyteller at a medium natural pace; crisp diction, controlled emotion, "
-                     "intimate rather than announcer-like.")
+DEFAULT_DIRECTION = ("Clear, natural Burmese dubbing delivery at a medium conversational pace; crisp diction, "
+                     "scene-appropriate emotion, faithful to the original line.")
 LOCAL_PROXY = "http://127.0.0.1:10808"
 LOCATION_HELP = ("Gemini က ဒီနိုင်ငံကနေ တိုက်ရိုက် သုံးခွင့်မပေးပါ (User location is not supported)။ VPN ဖွင့်ပြီး "
                  "Singapore / Japan / US server ရွေးပါ (v2rayN ဆိုရင် 127.0.0.1:10808 ကို အလိုလို သုံးပါတယ်)။")

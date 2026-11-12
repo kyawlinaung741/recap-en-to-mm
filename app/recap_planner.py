@@ -136,8 +136,8 @@ def _configure_gemini_key_pool(
 
     Policy:
       * 429/auth/quota -> next key in the current model.
-      * After every key is rejected -> next model and restart from key #1.
-      * 503/high-demand/timeout -> next model immediately and restart from key #1.
+      * 503/high-demand/timeout -> try the next account key on the SAME model first.
+      * If all account keys fail transiently -> next model, starting from key #1.
       * Model/key switches retry the exact same request without consuming validation retries.
     """
     if not key_pool:
@@ -1154,20 +1154,31 @@ def _gemini_json(
                 raise GeminiKeyPoolExhaustedError(_gemini_key_pool_message(pool_size, model_count)) from exc
 
             if _is_gemini_transient_model_error(exc):
-                # Required behavior: 503 / high-demand / timeout skips the rest of
-                # the current model's keys and starts the next model from Key 1.
+                # A transient 503/timeout can be project- or account-specific.
+                # Try the other Google account on this SAME model before changing
+                # models. Only after every configured key has failed do we advance.
                 if log:
-                    log(f"⚠️ {active_model} service/timeout error; switching to next model from Key 1...")
+                    log(f"⚠️ {active_model} service/timeout error on {active_key}; trying next account key...")
+                rotate = getattr(ai, "_recap_rotate_gemini_key", None)
+                if callable(rotate):
+                    try:
+                        if rotate():
+                            continue  # exact same prompt; validation retry is untouched
+                    except Exception as rotate_exc:
+                        raise RuntimeError(f"Gemini key switch failed: {rotate_exc}") from rotate_exc
+
+                if log:
+                    log(f"⚠️ All configured keys returned a service/timeout error for {active_model}; switching model...")
                 next_model = getattr(ai, "_recap_advance_gemini_model", None)
                 if callable(next_model):
                     try:
-                        if next_model("503/high-demand/timeout"):
+                        if next_model("503/high-demand/timeout; key pool tried"):
                             continue  # exact same prompt; validation retry is untouched
                     except Exception as model_exc:
                         raise RuntimeError(f"Gemini model switch failed: {model_exc}") from model_exc
                 if log:
                     log(f"⛔ Final Gemini model failed with service/timeout error: {exc}")
-                raise RuntimeError(f"Gemini fallback chain exhausted after service/timeout error: {exc}") from exc
+                raise GeminiKeyPoolExhaustedError(_gemini_key_pool_message(pool_size, model_count)) from exc
 
             if log:
                 log(f"⚠️ Gemini JSON attempt {attempt}/{retries} failed: {exc}")

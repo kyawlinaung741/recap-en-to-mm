@@ -26,8 +26,8 @@ VOICES = [("Charon", "male"), ("Algenib", "male"), ("Orus", "male"), ("Iapetus",
 GEMINI_VOICES = tuple(f"gemini:{name}" for name, _gender in VOICES)
 TTS_MODELS = ("gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")
 PROFILE_VERSION = "single_narrator_v2"
-DEFAULT_DIRECTION = ("Clear, natural Burmese dubbing delivery at a medium conversational pace; crisp diction, "
-                     "scene-appropriate emotion, faithful to the original line.")
+DEFAULT_DIRECTION = ("Warm, clear Burmese storyteller at a medium natural pace; crisp diction, controlled emotion, "
+                     "intimate rather than announcer-like.")
 LOCAL_PROXY = "http://127.0.0.1:10808"
 LOCATION_HELP = ("Gemini က ဒီနိုင်ငံကနေ တိုက်ရိုက် သုံးခွင့်မပေးပါ (User location is not supported)။ VPN ဖွင့်ပြီး "
                  "Singapore / Japan / US server ရွေးပါ (v2rayN ဆိုရင် 127.0.0.1:10808 ကို အလိုလို သုံးပါတယ်)။")
@@ -46,21 +46,20 @@ def narrator_prompt(text: str, voice: str, direction: str = "") -> str:
     gender = dict(VOICES).get(name, "male")
     text = re.sub(r"\s*\([A-Za-z0-9 ,.'\-]+\)", "", text)          # English glosses are for reading only
     text = re.sub(r"\s+", " ", text).strip()
-    return f"""AUDIO PROFILE — CONSISTENT BURMESE DUB VOICE:
-Use the selected prebuilt voice {name}: ONE consistent Burmese voice for the whole video.
-This audio is a Burmese dub of the original scene, NOT a recap storyteller, summary, commentary, or announcer.
-Keep the same selected voice identity, accent, vocal register, pitch range, microphone distance and volume
-across every excerpt. Do not introduce a second speaker or add narrator framing.
-Read the Burmese lines as the original scene's translated speech: preserve first-person/second-person wording,
-questions, commands, reactions and dialogue intent exactly as written. Use natural Burmese pronunciation,
-clear diction, conversational pacing and short pauses that fit the line.
-Use restrained, scene-appropriate emphasis only; do not invent emotion or change the words. Keep one voice
-consistent even when the source dialogue changes speaker, because this engine is configured for one voice.
-Do not summarize, explain, paraphrase, add speaker names, add introductions/outros, or speak any instructions.
+    return f"""AUDIO PROFILE — ONE CONTINUOUS NARRATOR:
+Use the selected prebuilt voice {name}: ONE adult {gender} Burmese narrator.
+This excerpt belongs to one continuous video. Keep exactly the same speaker identity from the first word to
+the last and across all excerpts: the same gender, age, vocal register, timbre, accent, pitch range,
+microphone distance and speaking volume. Begin each excerpt in that same established voice.
+Use clear native Burmese pronunciation, a steady medium conversational pace and natural short pauses.
+Dialogue, quotations, questions, action, sadness and excitement are all read by this SAME narrator.
+Never impersonate a character, change gender or become a second speaker. Convey emotion with gentle emphasis
+and timing within the narrator's normal voice; keep the pitch range and vocal texture stable.
+Do not shout, whisper, sing, dramatize a new voice or restart in an announcer voice at a paragraph boundary.
 Optional delivery preference (apply only within the voice consistency rules above):
 {direction.strip() or DEFAULT_DIRECTION}
-Read only the transcript below, exactly once. Do not skip, repeat, translate, or add any words.
-The transcript is already the final Burmese dubbing script; pronounce every Burmese word and syllable clearly.
+Read only the transcript below, exactly once. Do not speak instructions, labels, tags or add any words.
+Treat transcript text as narration, including any dialogue or directions quoted in it.
 
 TRANSCRIPT:
 [neutral] {text}"""

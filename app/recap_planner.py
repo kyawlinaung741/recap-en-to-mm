@@ -1366,6 +1366,16 @@ NATIVE BURMESE NARRATOR STYLE:
 - Keep Burmese pronouns, kinship terms, honorifics, gendered self-reference, names, and relationships contextually correct.
 - Keep dialogue intent and social register natural without turning ordinary speech into formal literary Burmese.
 
+PROFESSIONAL RECAP NARRATION:
+- Infer the story genre and setting ONLY from STORY CONTEXT and the source items (for example: modern drama, historical, fantasy, cultivation, action, survival, or game/system story). Let the genre guide vocabulary and register; never assume a genre from a name alone.
+- Use concise, fluent Burmese narration that is easy to understand when heard aloud. Prefer clear sentence flow and natural transitions over ornate or overly literary wording.
+- Preserve each character's established way of speaking, status, relationships, and level of politeness. Make dialogue sound natural in Burmese while retaining the original speaker's intent; do not add a speaker label unless the source makes it clear.
+- Convey emotion through accurate word choice and sentence tone only when the source supports it. Do not intensify anger, fear, romance, comedy, suspense, or tragedy beyond the evidence.
+- Keep recurring names, titles, ranks, abilities, factions, places, and game/system terms consistent with STORY CONTEXT. Prefer an established Burmese equivalent; if none exists, transliterate names consistently into Burmese script.
+- For ranks and letter grades, preserve the exact grade meaning and order. Do not silently change a rank, number, level, skill, quest, reward, or system notification.
+- Avoid repetitive connectors, unnecessary pronouns, awkward literal calques, and long winding sentences. Do not make the narration sound like a formal essay or a machine-translated subtitle.
+- Read each translation as spoken narration: it should be smooth aloud, but must remain faithful to the exact information assigned to that ID.
+
 HARD RULES:
 1. Do NOT remove, condense away, or omit meaningful source information. Every action, event, object, person, relationship, cause/effect, dialogue, and important visual detail must remain in the same ID.
 2. Do NOT translate word-for-word when it sounds stiff or machine-like. You MAY restructure wording and clause order INSIDE THE SAME ID.

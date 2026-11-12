@@ -5,10 +5,10 @@
 #   py -3.12 -m playwright install chromium        <- Myanmar title/text images
 #
 # Not installed by pip:
-#   - FFmpeg: ffmpeg.exe + ffprobe.exe on PATH, in C:\ffmpeg\bin, or in a folder named ffmpeg next to RUN.bat
+#   - FFmpeg: ffmpeg.exe + ffprobe.exe on PATH, in C:\\ffmpeg\\bin, or in a folder named ffmpeg next to RUN.bat
 #   - Gemini key: copy .env.example to .env and put your key in it
 
-google-genai==2.25.0        # Gemini translation
+google-genai==2.34.0        # Gemini translation; latest v2 line, avoids v3 API-default breaking change
 python-dotenv==1.0.1        # reads the Gemini key from .env
 edge-tts>=7.2.8             # Myanmar Edge TTS voices (left unpinned upward: Microsoft changes the service now and then)
 faster-whisper==1.2.1       # local Whisper for the English narration (NVIDIA GPU when available, otherwise CPU)

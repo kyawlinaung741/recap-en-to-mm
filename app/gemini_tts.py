@@ -6,7 +6,7 @@ by that same narrator — Gemini otherwise drifts (another age, a second speaker
 
 Keys: every GEMINI_IMAGE_PROJECT_<N>_KEY of the .env, else GEMINI_API_KEY (the same file as the translation). A key
 whose daily TTS quota is used up (429) is skipped for the rest of the run; the next line starts at the key that
-worked last. Models: gemini-3.1-flash-tts-preview, then gemini-2.5-flash-preview-tts. Proxy: GEMINI_PROXY ("none" =
+worked last. Models: Gemini 3.8 Flash TTS, then 3.8 Flash-Lite TTS, with legacy preview fallbacks. Proxy: GEMINI_PROXY ("none" =
 direct), else a running v2rayN on 127.0.0.1:10808, else direct (Gemini refuses requests from Myanmar without one).
 Finished lines are cached in the job, so a stopped run goes on where it stopped. Keys are never printed."""
 from __future__ import annotations
@@ -24,8 +24,8 @@ from typing import Callable
 VOICES = [("Charon", "male"), ("Algenib", "male"), ("Orus", "male"), ("Iapetus", "male"), ("Puck", "male"),
           ("Gacrux", "female"), ("Sulafat", "female"), ("Kore", "female"), ("Achernar", "female"), ("Leda", "female")]
 GEMINI_VOICES = tuple(f"gemini:{name}" for name, _gender in VOICES)
-TTS_MODELS = ("gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")
-PROFILE_VERSION = "single_narrator_v2"
+TTS_MODELS = ("gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts", "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts")
+PROFILE_VERSION = "single_narrator_v3_audio_validation"
 DEFAULT_DIRECTION = ("Warm, clear Burmese storyteller at a medium natural pace; crisp diction, controlled emotion, "
                      "intimate rather than announcer-like.")
 LOCAL_PROXY = "http://127.0.0.1:10808"
@@ -141,12 +141,22 @@ class GeminiTTSEngine:
                     try:
                         client = _client(self.keys[i])      # kept in a variable: a dropped genai Client closes itself
                         response = client.models.generate_content(model=model, contents=prompt, config=config)
-                        for part in response.candidates[0].content.parts:
-                            data = getattr(getattr(part, "inline_data", None), "data", None)
-                            if data:
-                                self._last_key = i
-                                return data
-                        last = f"{model}: no audio in the answer"
+                        found_audio = None
+                        for candidate in (getattr(response, "candidates", None) or []):
+                            content = getattr(candidate, "content", None)
+                            for part in (getattr(content, "parts", None) or []):
+                                inline = getattr(part, "inline_data", None)
+                                data = getattr(inline, "data", None)
+                                mime = str(getattr(inline, "mime_type", "") or "").lower()
+                                if data and (not mime or mime.startswith("audio/")):
+                                    found_audio = bytes(data)
+                                    break
+                            if found_audio:
+                                break
+                        if found_audio:
+                            self._last_key = i
+                            return found_audio
+                        last = f"{model}: response contained no audio payload"
                     except Exception as exc:  # noqa: BLE001
                         code = _code(exc)
                         last = f"{model} key {i + 1}: {code or ''} {str(exc)[:160]}"
@@ -174,17 +184,57 @@ class GeminiTTSEngine:
         out = self.work_dir / f"gemini_{key}.wav"
         if out.is_file() and out.stat().st_size > 1000:
             return out
-        pcm = self._ask(narrator_prompt(text, voice, self.direction), voice.removeprefix("gemini:"))
-        raw = out.with_suffix(".24k.wav")
-        with wave.open(str(raw), "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(24000)
-            w.writeframes(pcm)
+        audio_data = self._ask(narrator_prompt(text, voice, self.direction), voice.removeprefix("gemini:"))
+        raw = out.with_suffix(".source.wav")
+        # Gemini TTS normally returns raw 24 kHz mono PCM16. Accept a WAV container
+        # too, but never wrap an already-containerized WAV as raw PCM.
+        if audio_data.startswith(b"RIFF") and audio_data[8:12] == b"WAVE":
+            raw.write_bytes(audio_data)
+        else:
+            if len(audio_data) < 4800 or len(audio_data) % 2:
+                raise GeminiTTSError(
+                    f"Gemini TTS returned an invalid/too-short PCM payload ({len(audio_data)} bytes); "
+                    "no audio file was accepted."
+                )
+            with wave.open(str(raw), "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(24000)
+                w.writeframes(audio_data)
+        # Validate the source container before asking FFmpeg to process it.
+        try:
+            with wave.open(str(raw), "rb") as reader:
+                source_frames = reader.getnframes()
+                source_rate = reader.getframerate()
+                source_width = reader.getsampwidth()
+                source_channels = reader.getnchannels()
+            if source_frames <= 0 or source_rate <= 0 or source_width not in (1, 2, 3, 4) or source_channels <= 0:
+                raise ValueError("empty or invalid WAV metadata")
+        except (wave.Error, EOFError, OSError, ValueError) as exc:
+            raw.unlink(missing_ok=True)
+            raise GeminiTTSError(f"Gemini TTS returned an unreadable WAV audio payload: {exc}") from exc
         trim = ("silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.05,areverse,"
                 "silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.12,areverse")
         tempo = f",atempo={max(0.5, min(2.0, 1 + self.rate / 100)):.3f}" if self.rate else ""
-        subprocess.run([self.ffmpeg, "-y", "-v", "error", "-i", str(raw), "-af", trim + tempo, "-ar", "48000",
-                        "-ac", "1", "-c:a", "pcm_s16le", str(out)], check=True, creationflags=NO_WINDOW)
+        proc = subprocess.run(
+            [self.ffmpeg, "-y", "-v", "error", "-i", str(raw), "-af", trim + tempo, "-ar", "48000",
+             "-ac", "1", "-c:a", "pcm_s16le", str(out)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", creationflags=NO_WINDOW,
+        )
         raw.unlink(missing_ok=True)
+        if proc.returncode != 0 or not out.is_file() or out.stat().st_size <= 1000:
+            out.unlink(missing_ok=True)
+            raise GeminiTTSError(
+                "Gemini TTS audio conversion failed or produced no usable WAV: " + (proc.stderr or "")[-1200:]
+            )
+        try:
+            with wave.open(str(out), "rb") as reader:
+                frames = reader.getnframes()
+                rate = reader.getframerate()
+                duration = frames / float(rate or 1)
+                if frames <= 0 or duration < 0.05 or reader.getsampwidth() != 2:
+                    raise ValueError("output WAV is empty or too short")
+        except (wave.Error, EOFError, OSError, ValueError) as exc:
+            out.unlink(missing_ok=True)
+            raise GeminiTTSError(f"Gemini TTS output WAV failed validation: {exc}") from exc
         return out

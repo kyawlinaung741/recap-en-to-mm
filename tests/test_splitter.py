@@ -30,6 +30,19 @@ def speech(seconds: float, pauses=(), music_db=None) -> np.ndarray:
     return levels
 
 
+class HybridRenderTests(unittest.TestCase):
+    @mock.patch("splitter.subprocess.run")
+    def test_keyframe_detection_requires_keyframe_flag_and_close_timestamp(self, run):
+        run.return_value = mock.Mock(stdout="10.000000,K_\n10.040000,__\n", returncode=0)
+        self.assertTrue(sp._keyframe_near("ffprobe", "input.mp4", 10.02))
+        run.return_value = mock.Mock(stdout="10.000000,__\n", returncode=0)
+        self.assertFalse(sp._keyframe_near("ffprobe", "input.mp4", 10.02))
+
+    @mock.patch("splitter.subprocess.run", side_effect=subprocess.TimeoutExpired("ffprobe", 1))
+    def test_keyframe_probe_timeout_disables_stream_copy(self, _run):
+        self.assertFalse(sp._keyframe_near("ffprobe", "input.mp4", 10.0))
+
+
 class PlanTests(unittest.TestCase):
     def test_exact_cuts_every_n_minutes(self):
         parts = sp.plan_parts(400, 180, smart=False)

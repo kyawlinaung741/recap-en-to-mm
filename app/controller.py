@@ -163,7 +163,8 @@ class App(tk.Tk):
         self._subtitle_busy = False
         self._subtitle_scaled_key = None
         self._subtitle_photo = None
-        self.edge_rate_percent = tk.DoubleVar(value=float(_parse_edge_rate_percent(self.cfg.get("edge_tts_rate", "+0%"))))
+        self.edge_rate_percent = tk.DoubleVar(value=float(_parse_edge_rate_percent(self.cfg.get("edge_tts_rate", "-10%"))))
+        self.edge_pitch_hz = tk.DoubleVar(value=float(str(self.cfg.get("edge_tts_pitch", "-2Hz")).replace("Hz", "") or -2))
         self.max_speed = tk.StringVar(value=str(self.cfg.get("max_video_speed", 1.25)))
         self.max_slow = tk.StringVar(value=str(self.cfg.get("max_video_slow", 1.35)))
         self.mirror_video = tk.BooleanVar(value=bool(self.cfg.get("mirror_video", True)))
@@ -357,9 +358,22 @@ class App(tk.Tk):
         self.edge_speed_value.grid(row=0, column=1, padx=(8, 0))
         self.edge_speed_hint = hint(12, "-50% slower · 0% normal · +100% faster")
 
-        ttk.Label(source_box, text="Gemini voice style").grid(row=13, column=0, sticky="w", padx=(0, 8), pady=3)
-        ttk.Entry(source_box, textvariable=self.gemini_direction).grid(row=13, column=1, sticky="ew", pady=3)
-        hint(13, "Gemini only, e.g. calm storyteller — the voice itself never changes")
+        ttk.Label(source_box, text="Narrator Pitch").grid(row=13, column=0, sticky="w", padx=(0, 8), pady=3)
+        self.edge_pitch_frame = ttk.Frame(source_box)
+        self.edge_pitch_frame.grid(row=13, column=1, sticky="ew", pady=3)
+        self.edge_pitch_frame.columnconfigure(0, weight=1)
+        self.edge_pitch_slider = ttk.Scale(
+            self.edge_pitch_frame, from_=-4, to=0, orient="horizontal",
+            variable=self.edge_pitch_hz, command=self._edge_pitch_changed,
+        )
+        self.edge_pitch_slider.grid(row=0, column=0, sticky="ew")
+        self.edge_pitch_value = ttk.Label(self.edge_pitch_frame, text=f"{int(round(self.edge_pitch_hz.get())):+d}Hz", width=7)
+        self.edge_pitch_value.grid(row=0, column=1, padx=(8, 0))
+        hint(13, "Edge TTS only · -4Hz to 0Hz; default -2Hz")
+
+        ttk.Label(source_box, text="Gemini voice style").grid(row=14, column=0, sticky="w", padx=(0, 8), pady=3)
+        ttk.Entry(source_box, textvariable=self.gemini_direction).grid(row=14, column=1, sticky="ew", pady=3)
+        hint(14, "Gemini only, e.g. calm storyteller — the voice itself never changes")
 
         self._bind_wheel_recursive(source_box, settings_canvas)
         self._settings_canvas = settings_canvas
@@ -672,6 +686,12 @@ class App(tk.Tk):
     def _edge_rate_changed(self, value: str) -> None:
         try:
             self.edge_speed_value.configure(text=_format_edge_rate(value))
+        except Exception:
+            pass
+
+    def _edge_pitch_changed(self, value: str) -> None:
+        try:
+            self.edge_pitch_value.configure(text=f"{int(round(float(value))):+d}Hz")
         except Exception:
             pass
 
@@ -1243,6 +1263,7 @@ class App(tk.Tk):
         self.cfg["gemini_direction"] = settings["gemini_direction"]
         self.cfg["subtitles"] = settings["overlays"]["subtitles"]
         self.cfg["edge_tts_rate"] = settings["edge_tts_rate"]
+        self.cfg["edge_tts_pitch"] = settings["edge_tts_pitch"]
         # Engine settings stay fixed/hidden; only user-facing production values persist.
         self.cfg["zoom_factor"] = settings["zoom_factor"]
         self.cfg["mirror_video"] = bool(settings["mirror_video"])
@@ -1325,7 +1346,8 @@ class App(tk.Tk):
             "source_title": self.source_title.get().strip() or source.stem,
             "edge_tts_voice": voice,
             "edge_tts_rate": _format_edge_rate(self.edge_rate_percent.get()),
-            "edge_tts_pitch": str(self.cfg.get("edge_tts_pitch", "+0Hz")),
+            "edge_tts_pitch": f"{int(round(self.edge_pitch_hz.get())):+d}Hz",
+            "edge_tts_pitch": f"{int(round(self.edge_pitch_hz.get())):+d}Hz",
             "gemini_env_path": str(gemini_env) if gemini_env is not None else "",
             "voice": voice,
             "gemini_direction": self.gemini_direction.get().strip(),

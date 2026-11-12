@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[int, int, str], None]
-PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v2"
+PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v3_quality"
 TRANSLATION_DIRECTION = "en_to_mm"   # an English video's direction; others are "<code>_to_mm" (2026-10-17)
 # Whole-sentence lines like VOXCPM recap (2026-10-12): a line ends at a sentence end (or a clause after 6.5 s,
 # a breath after 10 s, at most 24 s). The old 4-6 s lines cut 20-35% of sentences in two, and Gemini then told a
@@ -375,6 +375,74 @@ def _fmt_ts(seconds: float) -> str:
 
 def _clean(s: Any) -> str:
     return re.sub(r"\s+", " ", str(s or "")).strip()
+
+
+
+_MYANMAR_NUMBER_WORDS = ("သုည", "တစ်", "နှစ်", "သုံး", "လေး", "ငါး", "ခြောက်", "ခုနစ်", "ရှစ်", "ကိုး")
+
+
+def _under_100_words(value: int) -> str:
+    value = int(value)
+    if value < 10:
+        return _MYANMAR_NUMBER_WORDS[value]
+    if value < 20:
+        return "ဆယ့်" + _MYANMAR_NUMBER_WORDS[value - 10]
+    tens, ones = divmod(value, 10)
+    return _MYANMAR_NUMBER_WORDS[tens] + "ဆယ်" + (("့" + _MYANMAR_NUMBER_WORDS[ones]) if ones else "")
+
+
+def _under_1000_words(value: int) -> str:
+    value = int(value)
+    hundreds, rest = divmod(value, 100)
+    if not hundreds:
+        return _under_100_words(rest)
+    return _MYANMAR_NUMBER_WORDS[hundreds] + "ရာ" + (("့" + _under_100_words(rest)) if rest else "")
+
+
+def _integer_to_myanmar_words(value: int) -> str:
+    value = int(value)
+    if value == 0:
+        return _MYANMAR_NUMBER_WORDS[0]
+    if value < 0:
+        return "အနုတ် " + _integer_to_myanmar_words(-value)
+    if value >= 10_000_000:
+        # Avoid guessing uncommon very-large-number readings; preserve digits in Myanmar script.
+        return "".join("၀၁၂၃၄၅၆၇၈၉"[int(ch)] if ch.isdigit() else ch for ch in str(value))
+    parts: list[str] = []
+    for unit, label in ((100_000, "သိန်း"), (10_000, "သောင်း"), (1_000, "ထောင်"), (100, "ရာ")):
+        if value >= unit:
+            count, value = divmod(value, unit)
+            parts.append(_under_1000_words(count) + label)
+    if value:
+        parts.append(_under_100_words(value))
+    return " ".join(parts)
+
+
+def _normalize_spoken_burmese(value: Any) -> str:
+    """Make numbers and common symbols readable; this same text feeds subtitles and TTS."""
+    text = _clean(value)
+    def percent(match: re.Match[str]) -> str:
+        raw = match.group(1).replace(",", "")
+        if "." in raw:
+            whole, fraction = raw.split(".", 1)
+            number = _integer_to_myanmar_words(int(whole)) + " ဒသမ " + " ".join(
+                _MYANMAR_NUMBER_WORDS[int(ch)] for ch in fraction
+            )
+        else:
+            number = _integer_to_myanmar_words(int(raw))
+        return number + " ရာခိုင်နှုန်း"
+    text = re.sub(r"(?<![A-Za-z0-9])(\d[\d,]*(?:\.\d+)?)\s*%", percent, text)
+    def number(match: re.Match[str]) -> str:
+        raw = match.group(0).replace(",", "")
+        if "." in raw:
+            whole, fraction = raw.split(".", 1)
+            return _integer_to_myanmar_words(int(whole)) + " ဒသမ " + " ".join(
+                _MYANMAR_NUMBER_WORDS[int(ch)] for ch in fraction
+            )
+        return _integer_to_myanmar_words(int(raw))
+    text = re.sub(r"(?<![A-Za-z0-9])\d[\d,]*(?:\.\d+)?(?![A-Za-z0-9])", number, text)
+    text = text.replace("&", "နှင့်")
+    return _clean(text)
 
 
 def _has_speakable_content(value: Any) -> bool:
@@ -1249,6 +1317,7 @@ and the current story state consistent when later translation requests are sent 
 RULES:
 - Preserve exact character/place/object names as they appear in the source when known.
 - Keep important relationships, aliases, roles, reveals, and terminology.
+- For each recurring proper name, record its exact source spelling and one Burmese phonetic rendering in name_consistency; keep that rendering stable in all later chunks.
 - Keep plot_state chronological but compact. Do not invent anything.
 - If an earlier assumption is corrected by this chunk, update it.
 Return the context memory in the structured format specified by the response schema. Keep it concise enough to reuse in every later request.
@@ -1341,7 +1410,7 @@ def _validate_translation_items(
                 f"ℹ️ Ignored Gemini timestamp for ID {uid}: {returned_ts}; "
                 f"using local {src['timestamp']}"
             )
-        out.append({**src, "translation": _sanitize_translation_text(raw.get("translation"))})
+        out.append({**src, "translation": _normalize_spoken_burmese(_sanitize_translation_text(raw.get("translation")))})
     return out
 
 
@@ -1368,6 +1437,9 @@ NATIVE BURMESE NARRATOR STYLE:
 - Avoid stiff word-for-word translation; restructure wording and clause order INSIDE THE SAME ID when needed.
 - Keep Burmese pronouns, kinship terms, honorifics, gendered self-reference, names, and relationships contextually correct.
 - Keep dialogue intent and social register natural without turning ordinary speech into formal literary Burmese.
+- Build a stable phonetic name dictionary from STORY CONTEXT MEMORY: map each original person/place/skill name to one Burmese-script pronunciation and reuse it consistently in every ID. Example: Christopher → ခရစ်စတိုဖာ. Do not translate a proper name by meaning or invent a different spelling later.
+- Convert quantities and years into natural spoken Burmese words when practical; write percentages as a spoken number followed by ရာခိုင်နှုန်း, and replace & with နှင့်. Never omit a number, level, date, or amount.
+- Prefer short, breath-friendly narrator clauses and natural pauses at sentence boundaries; do not add filler or stretch the narration.
 - Write letter grades/ranks in their Burmese spoken form so TTS reads the complete grade: A အဆင့် → အေ အဆင့်, B အဆင့် → ဘီ အဆင့်, C အဆင့် → စီ အဆင့်, S အဆင့် → အက်စ် အဆင့်. Apply this only when the letter is a grade/rank label, not an unrelated name or abbreviation.
 
 HARD RULES:

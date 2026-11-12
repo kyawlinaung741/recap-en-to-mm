@@ -876,13 +876,19 @@ def concat_video_parts(ffmpeg: str, parts: list[Path], output: Path, work_dir: P
 
 
 def mux_audio(ffmpeg: str, video: Path, audio: Path, output: Path, volume_percent: int = 100) -> None:
-    # Narration gain (100 = unchanged); the limiter keeps a raised voice from clipping.
-    volume = [] if int(volume_percent) == 100 else [
-        "-af", f"volume={int(volume_percent) / 100.0:.3f},alimiter=limit=0.95:level=disabled"]
+    # Process narration only: remove low-frequency rumble, normalize perceived loudness,
+    # then apply the user's gain and a true-peak limiter. No background ducking/mixing.
+    gain = max(0.5, min(3.0, int(volume_percent) / 100.0))
+    audio_filter = (
+        f"highpass=f=70,volume={gain:.3f},"
+        "loudnorm=I=-16:TP=-1.5:LRA=11,"
+        "alimiter=limit=0.95:level=disabled"
+    )
     cmd = [
         ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
         "-i", str(video), "-i", str(audio),
-        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", *volume, "-c:a", "aac", "-b:a", "192k",
+        "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+        "-af", audio_filter, "-c:a", "aac", "-b:a", "192k",
         "-shortest", "-movflags", "+faststart", str(output),
     ]
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")

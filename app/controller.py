@@ -1448,7 +1448,7 @@ class App(tk.Tk):
             "atomic_max_duration": float(self.cfg.get("atomic_max_duration", 5.6)),
             "atomic_target_duration": float(self.cfg.get("atomic_target_duration", 4.2)),
             "gemini_request_timeout_seconds": int(self.cfg.get("gemini_request_timeout_seconds", 120)),
-            "gemini_text_model": str(self.cfg.get("gemini_text_model", "gemini-3.5-flash")),
+            "gemini_text_model": str(self.cfg.get("gemini_text_model", "gemini-4-carbon")),
             "whisper_model_other": str(self.cfg.get("whisper_model_other", "medium")),
         }
 

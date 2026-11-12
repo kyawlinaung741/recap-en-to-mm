@@ -24,10 +24,13 @@ class GeminiSchemaTests(unittest.TestCase):
         self.assertEqual(
             GEMINI_MODEL_FALLBACK_CHAIN,
             [
+                "gemini-4-carbon",
+                "gemini-4-argon",
+                "gemini-3.8-flash",
+                "gemini-3.7-flash",
+                "gemini-3.6-flash",
                 "gemini-3.5-flash",
                 "gemini-3.5-flash-lite",
-                "gemini-3.6-flash",
-                "gemini-3.7-flash",
                 "gemini-3.1-flash-lite",
             ],
         )

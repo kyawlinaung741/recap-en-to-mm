@@ -1,12 +1,12 @@
-# Recap → Myanmar (+ Splitter)
+# Myanmar Dub Studio (+ Splitter)
 
-**English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … ဘယ်ဘာသာနဲ့ ပြောထားတဲ့ recap / ဇာတ်လမ်းပြော video ကိုမဆို မြန်မာအသံနဲ့ ပြန်ထုတ်ပေးတဲ့ Windows tool**
-Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
+**English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … မူရင်းဇာတ်လမ်းအသံကို မြန်မာဘာသာနဲ့ တိုက်ရိုက် Dub ပြန်ထုတ်ပေးတဲ့ Windows tool**
+Original-scene Burmese dubbing · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
 **Splitter** tab — ရှည်တဲ့ video ကို မိနစ်အလိုက် အပိုင်းခွဲ (Ratio + blur နောက်ခံ၊ စာ၊ Part နံပါတ်)
 
-> English: turns a recap/story video narrated in English, Chinese, Hindi, Korean … (detected by itself)
-> into the same video narrated in Myanmar (Burmese). The Myanmar voice leads, and the picture of every
-> line is re-timed to it ("Smart Sync"). A second tab, **Splitter**, cuts long videos into parts.
+ > English: translates the original spoken lines of a film/episode from English, Chinese, Hindi, Korean … into
+> Burmese dubbing. It is not a recap or a retelling: dialogue stays dialogue, and the original speaker's meaning
+> and point of view are preserved. The Burmese audio leads, and the picture is re-timed to it ("Smart Sync").
 > See the [English section](#english) below.
 
 ---
@@ -20,7 +20,8 @@ Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
 2. **အပိုင်းခွဲ** — စာကြောင်း၊ အပိုဒ်၊ အသံရပ်တဲ့နေရာတွေမှာ ခွဲပြီး အပိုင်းတိုင်းကို ၄.၂ စက္ကန့်လောက် (အများဆုံး ၅.၆ စက္ကန့်) ထားတယ်။ အပိုင်းများလေ ရုပ်နဲ့ အသံ ပိုကိုက်လေပါ။
 3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Gemini က ဇာတ်လမ်းတစ်ခုလုံးကို အရင်ဖတ်ပြီး ဇာတ်ကောင်နာမည်၊ ဆက်နွယ်မှု၊ နေရာတွေကို မှတ်ထားတယ်။ ဒါကြောင့် နာမည်တွေ တစ်ပုဒ်လုံး တစ်မျိုးတည်း ဖြစ်တယ်။
 4. **ဘာသာပြန်** — Gemini က တစ်ခါမှာ အပိုင်း ၄၀ စီ မြန်မာလို ပြန်တယ်။
-   - ဇာတ်ကြောင်းပြောသူလို သဘာဝကျတဲ့ စကားပြောပုံစံနဲ့ ပြန်တယ်။
+   - မူရင်းဇာတ်ကောင်က ပြောတဲ့စကားကိုပဲ မြန်မာလို Dub ပြန်တယ်။ Dialogue ကို တတိယပုဂ္ဂိုလ် ဇာတ်ကြောင်းပြန်ပြောတဲ့ပုံစံ မပြောင်းဘူး။
+   - A အဆင့်၊ B အဆင့်၊ C အဆင့်၊ S အဆင့်တွေကို အသံထွက်အတိုင်း အေ၊ ဘီ၊ စီ၊ အက်စ် အဆင့်လို့ မြန်မာစာနဲ့ တစ်ခါတည်းရေးတယ်။
    - အကျဉ်းမချုပ်ဘူး၊ ချန်မထားဘူး။ အပိုင်းတစ်ခုရဲ့ အကြောင်းအရာကို ဘေးအပိုင်းထဲ မရွှေ့ဘူး။
    - ပြန်ပြီးတိုင်း စစ်ဆေးတဲ့အဆင့် (audit) က ချန်ခဲ့တာ၊ နေရာလွဲတာ၊ ထပ်နေတာတွေကို ပြန်ပြင်တယ်။
    - မြန်မာစာလုံးထဲ တခြားဘာသာ စာလုံး ညှပ်ဝင်လာရင် (ဥပမာ "ဧည့်ခန်း" နေရာမှာ "မისခန်း") Gemini ကို ပြန်မေးတယ်။
@@ -67,7 +68,7 @@ Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
 | ဘယ်ဘက် | **Source language** (Auto-detect / English / Chinese / Hindi / Korean / …)၊ **Edge TTS Voice** (`my-MM-ThihaNeural` / `my-MM-NilarNeural`) နဲ့ **Edge TTS Speed** (−50% … +100%) ကို ရွေးပါ။ အောက်က **Run Logs** မှာ အလုပ်လုပ်နေတာတွေ ပြပါတယ်။ |
 | အလယ် | **Preview** — slider နဲ့ `◀ 5s` / `5s ▶` နဲ့ ကြည့်ချင်တဲ့ အချိန်ကို ရွှေ့ပြီး **Refresh Frame** နှိပ်ပါ။ Title၊ Logo၊ Extra text ကို ဆွဲရွှေ့ပြီး နေရာချလို့ရပါတယ်။ Blur box ကို ဆွဲလို့ရပါတယ်။ |
 | ညာဘက် | **Production Tools** — Zoom (1.00–1.25×)၊ Flip (ဘယ်ညာ ပြောင်းပြန်)၊ Voice vol (50–300%)၊ Short pauses၊ **Ratio** (16:9 / 9:16 / 1:1 / Original) နဲ့ **Fill** (Blur background / Black bars / Crop to fill)၊ **+ Draw Blur Box** / Delete Selected၊ Title (စာ၊ အရွယ်)၊ Logo (ဖိုင်၊ အရွယ်၊ အလင်းဖောက်မှု)၊ Extra Text Box။ |
-| အောက်ခြေ | **START / RESUME** — စတယ် (ရပ်ထားတာဆိုရင် ဆက်လုပ်တယ်)။ **STOP SAFELY** — အခု လုပ်နေတဲ့ အဆင့်ပြီးမှ ရပ်ပြီး လုပ်ပြီးသမျှ သိမ်းထားတယ်။ **Open Job Folder** — ထွက်လာတဲ့ ဖိုင်တွေ ဖွင့်ကြည့်ဖို့။ **Edit Text** — မြန်မာ narration ကို စာကြောင်းလိုက် ပြင်ဖို့ (အောက်မှာ ကြည့်ပါ)။ |
+| အောက်ခြေ | **START / RESUME** — စတယ် (ရပ်ထားတာဆိုရင် ဆက်လုပ်တယ်)။ **STOP SAFELY** — အခု လုပ်နေတဲ့ အဆင့်ပြီးမှ ရပ်ပြီး လုပ်ပြီးသမျှ သိမ်းထားတယ်။ **Open Job Folder** — ထွက်လာတဲ့ ဖိုင်တွေ ဖွင့်ကြည့်ဖို့။ **Edit Text** — မြန်မာ dub စာသား ကို စာကြောင်းလိုက် ပြင်ဖို့ (အောက်မှာ ကြည့်ပါ)။ |
 
 **ထွက်လာတဲ့ ဖိုင်:** `jobs\<video နာမည်>_<code>\edge_tts_smart_sync\final_edge_tts_smart_sync.mp4`
 
@@ -99,7 +100,7 @@ Window ထိပ်က **Splitter** tab ကို နှိပ်ပါ။ ရ�
 
 **Narrator Voice** မှာ Edge (my-MM-Thiha / Nilar) အပြင် `gemini:Charon`, `gemini:Kore` … (ယောက်ျားသံ ၅ မျိုး၊ မိန်းမသံ ၅ မျိုး)
 ရွေးလို့ရပါတယ်။ ဘာသာပြန်တဲ့ `.env` ထဲက key တွေကိုပဲ သုံးပါတယ်။
-- စာကြောင်းတိုင်းကို တစ်ခါစီ မေးရတာမို့ request တိုင်းမှာ "narrator တစ်ယောက်တည်း — အသံ၊ အသက်၊ pitch၊ အမြန်နှုန်း
+- စာကြောင်းတိုင်းကို တစ်ခါစီ မေးရတာမို့ request တိုင်းမှာ "ရွေးထားတဲ့ အသံတစ်မျိုးတည်း — အသံ၊ အသက်၊ pitch၊ အမြန်နှုန်း
   တစ်ကားလုံး မပြောင်းရ၊ dialogue လည်း အဲ့ narrator ပဲ ဖတ်" ဆိုတဲ့ ညွှန်ကြားချက် အတူတူကို ထည့်ပေးပါတယ် (တစ်ကားလုံး
   အသံမပြောင်းအောင်)။
 - **Gemini voice style** အကွက်မှာ ပြောပုံ (ဥပမာ calm storyteller) ရေးလို့ရပါတယ် — အသံကိုယ်တိုင်တော့ မပြောင်းပါ။
@@ -154,7 +155,7 @@ Smart Sync အဆင့်မှာ **Producer / Consumer Pipeline** သုံ�
 
 - Segment အစီအစဉ် မပြောင်းဘူး။ Smart Sync timing နဲ့ checkpoint ကို ဆက်ထိန်းထားပြီး ပြီးပြီးသား Audio / Video အပိုင်းတွေကို ပြန်သုံးနိုင်တယ်။
 - STOP တောင်းဆိုမှုနဲ့ render error တွေကို main worker ဆီ ပြန်ပို့တယ်။
-- Pipeline ပြီးမှ Audio / Video ကို ပေါင်းစပ်ပြီး နောက်ဆုံး narrator-only audio ကို mux လုပ်တယ်။
+- Pipeline ပြီးမှ Audio / Video ကို ပေါင်းစပ်ပြီး နောက်ဆုံး Burmese dub audio ကို mux လုပ်တယ်။
 - Queue နဲ့ Threading အတွက် Python standard library ကိုပဲ သုံးထားလို့ ဒီ feature ကြောင့် package အသစ် ထပ်သွင်းစရာ မလိုဘူး။
 
 ## Gemini key နဲ့ ကန့်သတ်ချက်
@@ -275,7 +276,7 @@ videos into parts.
    more units = more sync anchors.
 3. **Story memory** — Gemini reads the whole transcript first and keeps names, relationships and
    places consistent.
-4. **Translate** — Gemini translates 40 units per request into natural spoken Burmese narration
+4. **Translate** — Gemini translates 40 units per request into natural spoken Burmese dubbing
    (no summary, no shortening, every unit keeps its own content), then an audit pass repairs
    omissions/shifts/duplicates. Letters of another script inside the Burmese (e.g. Georgian "მის"
    inside "ဧည့်ခန်း") are asked again, and if still there removed and logged.

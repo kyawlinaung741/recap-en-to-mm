@@ -438,13 +438,13 @@ def _drop_foreign_letters(items: list[dict[str, Any]], log: LogFn) -> list[dict[
 # Burmese narration is read by a Burmese voice, so every word is in Burmese script (2026-10-12): English words
 # left in the Burmese are read in an English accent, and a line mostly in English can come back from Edge TTS
 # with no audio, which stopped the render.
-_LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'\u2019-]*[A-Za-z]")
+_LATIN_WORD_RE = re.compile(r"(?<![A-Za-z])[A-Za-z](?:[A-Za-z'\u2019-]*[A-Za-z])?(?![A-Za-z])")
 
 
 def _latin_words(text: Any) -> list[str]:
     """English (Latin) words of 2+ letters outside ( ) in the Burmese narration."""
-    bare = re.sub(r"\([^()]*\)", "", str(text or ""))
-    return list(dict.fromkeys(_LATIN_WORD_RE.findall(bare)))
+    # Include parenthetical glosses too: subtitles and spoken text must both be Burmese-only.
+    return list(dict.fromkeys(_LATIN_WORD_RE.findall(str(text or ""))))
 
 
 # A sentence split across two IDs was translated whole in the first one and then said again, or every ID after

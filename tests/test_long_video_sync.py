@@ -49,7 +49,7 @@ class LongVideoSyncTests(unittest.TestCase):
                 writer.setnchannels(1)
                 writer.setsampwidth(2)
                 writer.setframerate(sample_rate)
-                writer.writeframes(b"\\x00\\x00" * sample_frames)
+                writer.writeframes(b"\x00\x00" * sample_frames)
 
             with mock.patch.object(
                 core.subprocess, "run",

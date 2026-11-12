@@ -40,8 +40,11 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
             out = rp.translate_batch(None, story_context={}, previous_context=[], current=[_unit(1, 0.0, 2.0, "He came home.")],
                                      next_context=[], log=lambda _m: None)
         self.assertEqual(out[0]["translation"], "သူ အိမ်ပြန်လာခဲ့တယ်။")
-        self.assertIn("BURMESE NARRATION TRANSLATOR", prompts[0])
-        self.assertIn("Translate ONLY the CURRENT English items", prompts[0])
+        self.assertIn("BURMESE DUB TRANSLATOR", prompts[0])
+        self.assertIn("Translate ONLY the CURRENT source items", prompts[0])
+        self.assertIn("NOT a recap, summary, retelling", prompts[0])
+        self.assertIn("A အဆင့် → အေ အဆင့်", prompts[0])
+        self.assertIn("subtitle text and spoken text use this same", prompts[0])
 
     def test_letters_of_another_script_are_asked_again(self):
         answers = [{"items": [{"id": 1, "translation": "მისခန်းထဲမှာ မီးခိုးတွေ"}]},

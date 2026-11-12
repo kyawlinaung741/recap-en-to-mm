@@ -256,7 +256,7 @@ def _stream_copy_part(ffmpeg: str, source: str | Path, start: float, end: float,
 def render_part(ffmpeg: str, source: str | Path, start: float, end: float, output: Path, *,
                 layout: dict[str, Any], overlays: list[dict[str, Any]], encoder: str, has_audio: bool,
                 quality: str = "1080", ffprobe: str | None = None, allow_stream_copy: bool = False,
-                timeout_seconds: float | None = None,
+                timeout_seconds: float | None = None, log: LogFn | None = None,
                 on_time: Callable[[float], None] | None = None, stop: threading.Event | None = None,
                 procs: list | None = None) -> str:
     """Render one part. Returns 'stream-copy', 'h264_nvenc', or 'libx264'."""
@@ -315,7 +315,8 @@ def render_part(ffmpeg: str, source: str | Path, start: float, end: float, outpu
         temp.unlink(missing_ok=True)
         raise InterruptedError("Stopped")
     if code != 0 and encoder != "libx264":
-        log_message = f"⚠️ {output.name}: NVENC failed/timed out; retrying this part with CPU."
+        if log is not None:
+            log(f"⚠️ {output.name}: NVENC failed/timed out; retrying this part with CPU.")
         # No global encoder change: the next part attempts NVENC again.
         code, err = run(encoder_args("libx264", quality), cpu_timeout)
         used = "libx264"
@@ -436,7 +437,8 @@ def split_video(source: str | Path, settings: dict[str, Any], *, ffmpeg: str, ff
         jobs.append((p, out, key, overlays))
 
     log(f"⚙️ Parallel workers: {workers} · NVENC first · CPU fallback per failed part")
-    allow_copy = untouched_original and not fixed and not settings.get("label_on", False)
+    allow_copy = (untouched_original and not fixed and not settings.get("label_on", False)
+                  and quality == "1080" and int(layout["cw"]) == sw and int(layout["ch"]) == sh)
     if allow_copy:
         log("⚡ Stream Copy enabled only for keyframe-aligned cuts without overlays")
 
@@ -448,7 +450,7 @@ def split_video(source: str | Path, settings: dict[str, Any], *, ffmpeg: str, ff
         used = render_part(
             ffmpeg, source, p["start"], p["end"], out, layout=layout, overlays=overlays, encoder=encoder,
             has_audio=has_audio, ffprobe=ffprobe, allow_stream_copy=allow_copy,
-            timeout_seconds=max(90.0, (p["end"] - p["start"]) * 3.0),
+            timeout_seconds=max(90.0, (p["end"] - p["start"]) * 3.0), log=log,
             stop=stop, procs=procs, quality=quality)
         return p, out, key, used
 

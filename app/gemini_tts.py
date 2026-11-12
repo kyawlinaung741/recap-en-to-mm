@@ -162,7 +162,7 @@ class GeminiTTSEngine:
                         last = f"{model} key {i + 1}: {code or ''} {str(exc)[:160]}"
                         if "location is not supported" in str(exc).lower():
                             raise GeminiTTSError(LOCATION_HELP) from exc
-                        if code == 429 or code in (400, 401, 403):
+                        if code == 429 or code in (400, 401, 403, 404):
                             self._dead.add((model, i))
                             continue
                         if code in (500, 502, 503, 504):

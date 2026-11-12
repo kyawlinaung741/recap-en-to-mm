@@ -88,11 +88,11 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
 
     def test_spoken_text_normalization_converts_numbers_percent_and_ampersand(self):
         self.assertEqual(
-            rp._normalize_spoken_burmese("၂၀၂၅"), "၂၀၂၅"
+            rp._normalize_spoken_burmese("၂၀၂၅"), "နှစ်ထောင် နှစ်ဆယ့်ငါး"
         )
         self.assertEqual(
-            rp._normalize_spoken_burmese("2025 ခုနှစ်မှာ 50% အောင်မြင်ပြီး A & B"),
-            "နှစ်ထောင် နှစ်ဆယ့်ငါး ခုနှစ်မှာ ငါးဆယ် ရာခိုင်နှုန်း အောင်မြင်ပြီး A နှင့် B",
+            rp._normalize_spoken_burmese("2025 ခုနှစ်မှာ 50% အောင်မြင်ပြီး အရည်အသွေး & မြန်နှုန်း"),
+            "နှစ်ထောင် နှစ်ဆယ့်ငါး ခုနှစ်မှာ ငါးဆယ် ရာခိုင်နှုန်း အောင်မြင်ပြီး အရည်အသွေး နှင့် မြန်နှုန်း",
         )
 
     def test_plan_covers_the_whole_video_with_midpoint_boundaries(self):

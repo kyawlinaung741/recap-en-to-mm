@@ -1,12 +1,12 @@
-# Myanmar Dub Studio (+ Splitter)
+# Recap → Myanmar (+ Splitter)
 
-**English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … မူရင်းဇာတ်လမ်းအသံကို မြန်မာဘာသာနဲ့ တိုက်ရိုက် Dub ပြန်ထုတ်ပေးတဲ့ Windows tool**
-Original-scene Burmese dubbing · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
+**English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … ဘာသာစကားမျိုးစုံနဲ့ ပြောထားတဲ့ ဇာတ်လမ်း/Recap video ကို မြန်မာ Narrator အသံနဲ့ ပြန်လည်တင်ဆက်ပေးတဲ့ Windows tool**
+Myanmar story narration · Whisper + Gemini translation · Edge TTS / Gemini TTS · Smart Sync
 **Splitter** tab — ရှည်တဲ့ video ကို မိနစ်အလိုက် အပိုင်းခွဲ (Ratio + blur နောက်ခံ၊ စာ၊ Part နံပါတ်)
 
- > English: translates the original spoken lines of a film/episode from English, Chinese, Hindi, Korean … into
-> Burmese dubbing. It is not a recap or a retelling: dialogue stays dialogue, and the original speaker's meaning
-> and point of view are preserved. The Burmese audio leads, and the picture is re-timed to it ("Smart Sync").
+ > English: turns a story/recap video into natural Burmese narrator-style storytelling. Gemini preserves the plot,
+> names, relationships and sequence without inventing or omitting story details. The narration audio leads, and
+> Smart Sync adjusts the picture timing to match it.
 > See the [English section](#english) below.
 
 ---
@@ -17,15 +17,16 @@ Original-scene Burmese dubbing · Whisper + Gemini · Microsoft Edge TTS (Myanma
    - **Source language** = Auto-detect ဆိုရင် Whisper က ဘယ်ဘာသာလဲ အရင် နားထောင်ကြည့်တယ် (ပထမ ၈ မိနစ်)။ ကိုယ်တိုင်လည်း ရွေးလို့ရတယ်။
    - English ဆို `small.en` (~460 MB)၊ တခြားဘာသာဆို `medium` (~1.5 GB, multilingual) နဲ့ နားထောင်တယ်။ Model တွေကို ပထမဆုံးအကြိမ်ပဲ download လုပ်ရတယ်။
    - ဟိန္ဒီနဲ့ Urdu က အသံတူလို့ Auto-detect မှာ Urdu ထွက်ရင် ဟိန္ဒီအဖြစ် ရေးတယ်။
-2. **အပိုင်းခွဲ** — စာကြောင်း၊ အပိုဒ်၊ အသံရပ်တဲ့နေရာတွေမှာ ခွဲပြီး အပိုင်းတိုင်းကို ၄.၂ စက္ကန့်လောက် (အများဆုံး ၅.၆ စက္ကန့်) ထားတယ်။ အပိုင်းများလေ ရုပ်နဲ့ အသံ ပိုကိုက်လေပါ။
+2. **အပိုင်းခွဲ** — စာကြောင်း၊ သဘာဝကျတဲ့ စကားစုနဲ့ အသံရပ်တဲ့နေရာတွေကို အခြေခံပြီး sync unit ခွဲတယ်။ စာကြောင်းရှည်ရင် အသက်ရှူရပ်နားလို့ သင့်တဲ့ နေရာမှာ ခွဲပေးတယ်။
 3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Gemini က ဇာတ်လမ်းတစ်ခုလုံးကို အရင်ဖတ်ပြီး ဇာတ်ကောင်နာမည်၊ ဆက်နွယ်မှု၊ နေရာတွေကို မှတ်ထားတယ်။ ဒါကြောင့် နာမည်တွေ တစ်ပုဒ်လုံး တစ်မျိုးတည်း ဖြစ်တယ်။
-4. **ဘာသာပြန်** — Gemini က တစ်ခါမှာ အပိုင်း ၄၀ စီ မြန်မာလို ပြန်တယ်။
-   - မူရင်းဇာတ်ကောင်က ပြောတဲ့စကားကိုပဲ မြန်မာလို Dub ပြန်တယ်။ Dialogue ကို တတိယပုဂ္ဂိုလ် ဇာတ်ကြောင်းပြန်ပြောတဲ့ပုံစံ မပြောင်းဘူး။
-   - A အဆင့်၊ B အဆင့်၊ C အဆင့်၊ S အဆင့်တွေကို အသံထွက်အတိုင်း အေ၊ ဘီ၊ စီ၊ အက်စ် အဆင့်လို့ မြန်မာစာနဲ့ တစ်ခါတည်းရေးတယ်။
+4. **ဘာသာပြန်** — Gemini က တစ်ခါမှာ အပိုင်း ၄၀ အထိ မြန်မာ Narrator ပုံစံနဲ့ ပြန်တယ်။
+   - မူရင်းဇာတ်လမ်းရဲ့ အချက်အလက်၊ အစဉ်လိုက်ဖြစ်စဉ်၊ ဇာတ်ကောင်နာမည်နဲ့ ဆက်နွယ်မှုတွေကို ထိန်းထားပြီး သဘာဝကျတဲ့ မြန်မာဇာတ်ကြောင်းပြောပုံစံ သုံးတယ်။ Direct Dub ပုံစံ မဟုတ်ဘူး။
+   - A/B/C/S အဆင့်သတ်မှတ်ချက်တွေကို subtitle စာသားမှာ မူရင်းအတိုင်း ထိန်းပြီး Narrator ဖတ်တဲ့အခါမှ အေ/ဘီ/စီ/အက်စ် အဆင့်လို့ အသံထွက်ပြောင်းပေးတယ်။
+   - နံပါတ်နဲ့ ရာခိုင်နှုန်းတွေကို မြန်မာစကားပြောပုံစံအဖြစ် ပြောင်းပြီး `%` ကို ရာခိုင်နှုန်း၊ `&` ကို နှင့် လို့ ပြောင်းပေးတယ်။
    - အကျဉ်းမချုပ်ဘူး၊ ချန်မထားဘူး။ အပိုင်းတစ်ခုရဲ့ အကြောင်းအရာကို ဘေးအပိုင်းထဲ မရွှေ့ဘူး။
    - ပြန်ပြီးတိုင်း စစ်ဆေးတဲ့အဆင့် (audit) က ချန်ခဲ့တာ၊ နေရာလွဲတာ၊ ထပ်နေတာတွေကို ပြန်ပြင်တယ်။
    - မြန်မာစာလုံးထဲ တခြားဘာသာ စာလုံး ညှပ်ဝင်လာရင် (ဥပမာ "ဧည့်ခန်း" နေရာမှာ "မისခန်း") Gemini ကို ပြန်မေးတယ်။
-5. **အသံထုတ်** — Edge TTS မြန်မာအသံ (Thiha ယောက်ျားသံ / Nilar မိန်းမသံ) နဲ့ ထုတ်တယ်။ "Short pauses" ဖွင့်ထားရင် Edge ထည့်တတ်တဲ့ အသံတိတ်ကို ဖြတ်လို့ စာကြောင်းကြားမှာ ~၀.၂၅ စက္ကန့်ပဲ နားတယ်။
+5. **အသံထုတ်** — ရွေးထားတဲ့ Narrator engine နဲ့ မြန်မာအသံ ထုတ်တယ်။ Edge TTS မှာ Voice, Speed နဲ့ Pitch ကို ချိန်နိုင်တယ်။ Voice track ကို loudness normalization နဲ့ peak limiting လုပ်တယ်။
 6. **Smart Sync** — မြန်မာအသံက အချိန်ကို ဦးဆောင်ပြီး ရုပ်က လိုက်ညှိတယ်။ အသေးစိတ်ကို [Smart Sync ဘယ်လိုအလုပ်လုပ်လဲ](#smart-sync-ဘယ်လိုအလုပ်လုပ်လဲ) မှာ ကြည့်ပါ။
 7. **ဖြည့်စွက်** — Blur box (မူရင်း watermark/စာတန်းဖုံးဖို့)၊ Title၊ Logo၊ Extra text၊ Zoom၊ Flip တွေကို preview ပေါ်မှာ နေရာချပြီး ထည့်လို့ရတယ်။ Video အချိုး (**16:9 / 9:16 / 1:1 / Original**) ကိုလည်း ရွေးလို့ရတယ်။
 
@@ -65,10 +66,10 @@ Original-scene Burmese dubbing · Whisper + Gemini · Microsoft Edge TTS (Myanma
 | နေရာ | လုပ်ရမယ့်အရာ |
 |---|---|
 | အပေါ် | **Source Video → Browse** နဲ့ video ကို ရွေးပါ။ **Folder** နှိပ်ရင် folder ထဲက video တွေကို တစ်ခုပြီးတစ်ခု လုပ်ပါတယ် (ပြီးပြီးသား video တွေကို ကျော်ပါတယ်)။ **Gemini .env** မှာ `.env` ဖိုင်ကို ရွေးပါ (default က ဒီ folder ထဲက `.env`)။ **Save final to** — folder ရွေးထားရင် ပြီးတဲ့ video ကို `<video နာမည်>_Myanmar.mp4` နဲ့ အဲ့ folder ထဲ ထည့်ပေးပါတယ် (ဗလာထားရင် job folder ထဲမှာပဲ)။ |
-| ဘယ်ဘက် | **Source language** (Auto-detect / English / Chinese / Hindi / Korean / …)၊ **Edge TTS Voice** (`my-MM-ThihaNeural` / `my-MM-NilarNeural`) နဲ့ **Edge TTS Speed** (−50% … +100%) ကို ရွေးပါ။ အောက်က **Run Logs** မှာ အလုပ်လုပ်နေတာတွေ ပြပါတယ်။ |
+| ဘယ်ဘက် | **Source language** (Auto-detect / English / Chinese / Hindi / Korean / …)၊ Narrator engine/voice နဲ့ Edge TTS Speed ကို ရွေးပါ။ အောက်က **Run Logs** မှာ လုပ်ဆောင်မှုကို ကြည့်နိုင်ပါတယ်။ |
 | အလယ် | **Preview** — slider နဲ့ `◀ 5s` / `5s ▶` နဲ့ ကြည့်ချင်တဲ့ အချိန်ကို ရွှေ့ပြီး **Refresh Frame** နှိပ်ပါ။ Title၊ Logo၊ Extra text ကို ဆွဲရွှေ့ပြီး နေရာချလို့ရပါတယ်။ Blur box ကို ဆွဲလို့ရပါတယ်။ |
-| ညာဘက် | **Production Tools** — Zoom (1.00–1.25×)၊ Flip (ဘယ်ညာ ပြောင်းပြန်)၊ Voice vol (50–300%)၊ Short pauses၊ **Ratio** (16:9 / 9:16 / 1:1 / Original) နဲ့ **Fill** (Blur background / Black bars / Crop to fill)၊ **+ Draw Blur Box** / Delete Selected၊ Title (စာ၊ အရွယ်)၊ Logo (ဖိုင်၊ အရွယ်၊ အလင်းဖောက်မှု)၊ Extra Text Box။ |
-| အောက်ခြေ | **START / RESUME** — စတယ် (ရပ်ထားတာဆိုရင် ဆက်လုပ်တယ်)။ **STOP SAFELY** — အခု လုပ်နေတဲ့ အဆင့်ပြီးမှ ရပ်ပြီး လုပ်ပြီးသမျှ သိမ်းထားတယ်။ **Open Job Folder** — ထွက်လာတဲ့ ဖိုင်တွေ ဖွင့်ကြည့်ဖို့။ **Edit Text** — မြန်မာ dub စာသား ကို စာကြောင်းလိုက် ပြင်ဖို့ (အောက်မှာ ကြည့်ပါ)။ |
+| ညာဘက် | **Production Tools** — Zoom (1.00–1.25×)၊ Flip၊ Voice vol (50–300%)၊ Edge TTS Pitch (−4Hz … 0Hz)၊ Short pauses၊ **Ratio** (16:9 / 9:16 / 1:1 / Original) နဲ့ **Fill** (Blur background / Black bars / Crop to fill)၊ **+ Draw Blur Box** / Delete Selected၊ Title (စာ၊ အရွယ်)၊ Logo (ဖိုင်၊ အရွယ်၊ အလင်းဖောက်မှု)၊ Extra Text Box။ |
+| အောက်ခြေ | **START / RESUME** — စတင်/ဆက်လုပ်ရန်။ **STOP SAFELY** — လုံခြုံတဲ့အဆင့်မှာ ရပ်ရန်။ **Open Job Folder** — ထွက်လာတဲ့ဖိုင်များ ကြည့်ရန်။ **Edit Text** — မြန်မာ Narration စာသားကို အပိုင်းလိုက် ပြင်ရန်။ |
 
 **ထွက်လာတဲ့ ဖိုင်:** `jobs\<video နာမည်>_<code>\edge_tts_smart_sync\final_edge_tts_smart_sync.mp4`
 
@@ -96,16 +97,11 @@ Window ထိပ်က **Splitter** tab ကို နှိပ်ပါ။ ရ�
 
 အပိုင်းတိုင်းကို ပြန် encode လုပ်လို့ ဖြတ်တဲ့နေရာ အတိအကျ ဖြစ်ပါတယ် (NVIDIA GPU ရှိရင် NVENC နဲ့ မြန်ပါတယ် — 31 မိနစ် video ကို 9:16 + စာ + Part နံပါတ်နဲ့ 10 ပိုင်း ~4 မိနစ်)။
 
-## Gemini TTS အသံ
+## Narrator အသံနှင့် အသံအရည်အသွေး
 
-**Narrator Voice** မှာ Edge (my-MM-Thiha / Nilar) အပြင် `gemini:Charon`, `gemini:Kore` … (ယောက်ျားသံ ၅ မျိုး၊ မိန်းမသံ ၅ မျိုး)
-ရွေးလို့ရပါတယ်။ ဘာသာပြန်တဲ့ `.env` ထဲက key တွေကိုပဲ သုံးပါတယ်။
-- စာကြောင်းတိုင်းကို တစ်ခါစီ မေးရတာမို့ request တိုင်းမှာ "ရွေးထားတဲ့ အသံတစ်မျိုးတည်း — အသံ၊ အသက်၊ pitch၊ အမြန်နှုန်း
-  တစ်ကားလုံး မပြောင်းရ၊ dialogue လည်း အဲ့ narrator ပဲ ဖတ်" ဆိုတဲ့ ညွှန်ကြားချက် အတူတူကို ထည့်ပေးပါတယ် (တစ်ကားလုံး
-  အသံမပြောင်းအောင်)။
-- **Gemini voice style** အကွက်မှာ ပြောပုံ (ဥပမာ calm storyteller) ရေးလို့ရပါတယ် — အသံကိုယ်တိုင်တော့ မပြောင်းပါ။
-- Key တစ်ခုရဲ့ ဒီနေ့ quota ကုန်ရင် နောက် key ကို ပြောင်းသုံးပါတယ်။ အကုန်ကုန်ရင် ရပ်ပြီး ပြီးသားစာကြောင်းတွေ သိမ်းထားလို့
-  မနက် START/RESUME နှိပ်ရင် ကျန်တာပဲ ဆက်လုပ်ပါတယ်။ VPN လိုပါတယ် (Gemini က မြန်မာကနေ တိုက်ရိုက် မရ)။
+Narrator အတွက် ရရှိနိုင်တဲ့ အသံ engine/voice ကို ရွေးနိုင်ပါတယ်။ Edge TTS ကို သုံးပါက Voice, Speed နဲ့ Pitch ကို ချိန်နိုင်ပြီး Pitch slider သည် Edge TTS အတွက်သာ ဖြစ်ပါတယ်။ Voice track ကို loudness normalization နဲ့ peak limiting လုပ်ပေးပြီး အသံအတိုးအကျယ်ကို 50%–300% အတွင်း ချိန်နိုင်ပါတယ်။ Background auto-ducking မလုပ်ပါ။
+
+A/B/C/S အဆင့်သတ်မှတ်ချက်တွေကို subtitle စာသားမှာ မူရင်းအတိုင်း ထားပြီး Narrator အသံထုတ်တဲ့အခါမှ အေ/ဘီ/စီ/အက်စ် အဆင့်လို့ အသံထွက်ပြောင်းပေးပါတယ်။
 
 ## စာတန်း (Narration Subtitle) နဲ့ Video quality
 
@@ -163,7 +159,7 @@ Smart Sync အဆင့်မှာ **Producer / Consumer Pipeline** သုံ�
 - Gemini ကို **ဘာသာပြန်ဖို့ပဲ** သုံးတယ်။ English ကို စာသားပြောင်းတာက စက်ထဲမှာ Whisper နဲ့ လုပ်တယ်။
 - အခမဲ့ key မှာ တစ်ရက်ကို သုံးလို့ရတဲ့ အကြိမ်ရေ ကန့်သတ်ထားတယ် (Google project တစ်ခုချင်းစီ အလိုက်)။ ပြည့်ရင်:
   - နောက် key ကို အလိုလို ပြောင်းတယ်။
-  - Key တွေ အကုန်ပြည့်ရင် နောက် model ကို ပြောင်းတယ် (`gemini-3.5-flash → 3.5-flash-lite → 3.6-flash → 3.7-flash → 3.1-flash-lite`)။
+  - Quota သို့မဟုတ် model error ဖြစ်ပါက app ထဲမှာ သတ်မှတ်ထားတဲ့ fallback လုပ်ဆောင်မှုအတိုင်း ပြန်ကြိုးစားပါတယ်။
   - အကုန်ပြည့်သွားရင် ရပ်သွားပေမဲ့ ပြီးသမျှ မပျောက်ဘူး။ နောက်နေ့ (သို့) key အသစ်ထည့်ပြီး **START / RESUME** နှိပ်ရင် ရပ်ခဲ့တဲ့နေရာကနေ ဆက်တယ်။
 - Gemini ကို VPN / proxy နဲ့မှ သုံးလို့ရတဲ့ စက်ဆိုရင် `.env` ထဲမှာ `GEMINI_PROXY=http://127.0.0.1:10808` (ကိုယ့် proxy လိပ်စာ) ထည့်ပါ။ `127.0.0.1:10808` (v2rayN) ဖွင့်ထားရင် အလိုလို သုံးပါတယ်။ အမြဲ တိုက်ရိုက်ပဲ သုံးချင်ရင် `GEMINI_PROXY=none` ထည့်ပါ။ Edge TTS ကတော့ proxy မသုံးဘဲ တိုက်ရိုက် အရင်စမ်းပါတယ်။
 
@@ -261,27 +257,25 @@ Internet မလိုပါဘူး။ Gemini ကို အတုနဲ့ အ�
 
 ## English
 
-**Recap → Myanmar** turns a recap/story video narrated in any language Whisper knows (English, Chinese,
-Hindi, Korean, Japanese, Thai, …) into a Myanmar-narrated one on Windows. The **Splitter** tab cuts long
+**Recap → Myanmar** turns a story/recap video narrated in a language supported by Whisper (English, Chinese,
+Hindi, Korean, Japanese, Thai, …) into natural Burmese narrator-style storytelling on Windows. The **Splitter** tab cuts long
 videos into parts.
 
 ### How it works
 1. **Listen** — local Whisper (faster-whisper; NVIDIA GPU or CPU) writes the speech with word timestamps.
-   **Source language** = Auto-detect lets the multilingual `base` model listen to the first 8 minutes
-   first; English is heard by `small.en` (~460 MB), any other language by the multilingual `medium`
-   (~1.5 GB; `"whisper_model_other": "small"` in config.json is faster on a PC without an NVIDIA GPU).
+   **Source language** = Auto-detect checks the opening audio; English uses `small.en`, and other languages use a multilingual Whisper model. Model choice can depend on the app configuration.
    Hindi and Urdu sound alike, so an Auto-detected "Urdu" is written as Hindi (choose Urdu to keep Urdu
    letters). Where Whisper writes few sentence marks, the end of a Whisper segment counts as a sentence end.
 2. **Split** — sentence/clause/pause boundaries give short sync units (about 4.2 s, at most 5.6 s);
    more units = more sync anchors.
 3. **Story memory** — Gemini reads the whole transcript first and keeps names, relationships and
    places consistent.
-4. **Translate** — Gemini translates 40 units per request into natural spoken Burmese dubbing
+4. **Translate** — Gemini translates up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing)
    (no summary, no shortening, every unit keeps its own content), then an audit pass repairs
    omissions/shifts/duplicates. Letters of another script inside the Burmese (e.g. Georgian "მის"
    inside "ဧည့်ခန်း") are asked again, and if still there removed and logged.
-5. **Voice** — Microsoft Edge TTS Myanmar voices (Thiha / Nilar). "Short pauses" trims the silence
-   Edge puts around each clip (~0.25 s between lines instead of ~1 s).
+5. **Voice** — Myanmar narrator audio from the selected engine. Edge TTS provides adjustable voice / rate / pitch;
+   the rendered voice track is loudness-normalized and peak-limited.
 6. **Smart Sync** — every unit owns a window of the original picture (the silence between two units
    is split at its middle, so the whole video is used). Each window is slowed down or sped up to the
    length of its Myanmar voice; it never plays faster than 1.25× (`max_video_speed`), and when the
@@ -292,7 +286,7 @@ videos into parts.
    Blur background, Black bars or Crop to fill. Optional zoom/flip; NVENC or libx264.
 7. **Production tools** — blur boxes, title, logo and an extra text box placed on the preview.
 
-The output has only the Myanmar voice (no original audio or music).
+The final output uses the generated Myanmar narration track; the original source audio is not mixed into that narrator track.
 
 ### Requirements
 Windows 10/11 64-bit · Python 3.12 64-bit (with tcl/tk, on PATH) · FFmpeg (`ffmpeg.exe` +
@@ -327,7 +321,7 @@ Double-click **`RUN.bat`**:
   `<video name>_Myanmar.mp4`.
 - **Source language** (Auto-detect, English, Chinese, Hindi, …), **Edge TTS Voice / Speed** on the left.
 - **Preview** in the middle: seek, Refresh Frame, drag the title/logo/text, draw blur boxes.
-- **Production Tools** on the right: Zoom, Flip, Voice vol, Short pauses, Ratio + Fill, blur,
+- **Production Tools** on the right: Zoom, Flip, Voice vol (50–300%), Edge TTS Pitch (−4Hz to 0Hz), Short pauses, Ratio + Fill, blur,
   title, logo, extra text.
 - **START / RESUME** — starts or continues; **STOP SAFELY** — stops at a safe point and keeps
   everything; **Open Job Folder**; **Edit Text** — read each English line next to its Burmese narration,
@@ -360,13 +354,9 @@ Double-click **`RUN.bat`**:
 Result: `jobs\<name>_<code>\edge_tts_smart_sync\final_edge_tts_smart_sync.mp4`
 (plus `whisper_transcript.txt`, `timestamp_translations.json`, `smart_sync_plan.json`, `run.log`).
 
-### Gemini TTS voice
-**Narrator Voice** also lists `gemini:Charon`, `gemini:Kore`, … (5 male, 5 female) next to the Edge voices; they use the
-keys of the same `.env`. Every line is its own request, so each one carries the same "one continuous narrator"
-direction (same voice, age, pitch and pace for the whole video; dialogue read by that narrator). **Gemini voice
-style** adds a delivery preference (e.g. calm storyteller) without changing the voice. A key whose daily quota is
-used up is skipped; when all are, the run stops and finished lines are kept for START/RESUME. Needs a VPN in
-Myanmar.
+### Narrator voice and audio quality
+
+Choose an available narrator engine/voice in the app. With Edge TTS, voice, speaking rate and pitch can be adjusted; pitch control applies to Edge TTS only. The narrator track receives loudness normalization and peak limiting, with volume adjustable from 50% to 300%. Background auto-ducking is not applied. Grade labels remain unchanged in subtitles while their narrator pronunciation is normalized (A/B/C/S → အေ/ဘီ/စီ/အက်စ်).
 
 ### Narration subtitles and video quality
 **Narration Subtitle** (bottom of Production Tools): the spoken Burmese is burned in as subtitles — installed
@@ -380,7 +370,7 @@ the same; changing it re-renders only the video parts (translation and voice are
 
 ### Parallel narrator TTS + video rendering
 
-Smart Sync runs a bounded producer/consumer pipeline: the producer creates narration clips in segment order while one FFmpeg consumer renders each ready video segment concurrently. The queue holds at most **2 pending segments**, limiting buffered work. Segment order, Smart Sync timing and reusable audio/video checkpoints are preserved. STOP requests and render errors are propagated to the worker. Audio/video concatenation and final narrator-only audio muxing happen after the pipeline completes. This uses Python's standard-library queue/threading modules; no extra package is required.
+Smart Sync uses a bounded producer/consumer pipeline: narration clips are produced in segment order while ready video segments are rendered concurrently. The pending queue is limited to **2 segments** to control memory use. Segment order, Smart Sync timing and reusable audio/video checkpoints are preserved. STOP requests and render errors are propagated to the worker. Audio/video parts are concatenated before the final narration audio is muxed. This uses Python's standard-library queue/threading modules; no extra package is required.
 
 
 ### Advanced (`config.json`, created on the first START)

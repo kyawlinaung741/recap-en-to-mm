@@ -19,7 +19,7 @@ from typing import Any, Callable
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[int, int, str], None]
-PLANNER_MODE = "timestamp_translation_en_to_mm_direct_dub_v3"
+PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v2"
 TRANSLATION_DIRECTION = "en_to_mm"   # an English video's direction; others are "<code>_to_mm" (2026-10-17)
 # Whole-sentence lines like VOXCPM recap (2026-10-12): a line ends at a sentence end (or a clause after 6.5 s,
 # a breath after 10 s, at most 24 s). The old 4-6 s lines cut 20-35% of sentences in two, and Gemini then told a
@@ -1357,24 +1357,17 @@ def translate_batch(
     source_language: str = "English",
 ) -> list[dict[str, Any]]:
     task_rules = """
-You are a CONTEXT-AWARE BURMESE DUB TRANSLATOR.
-Translate ONLY the CURRENT source items into a natural, complete Burmese DUB SCRIPT for the original story. This is direct localization/dubbing of the original film or episode — NOT a recap, summary, retelling, review, or a person watching the story and explaining it.
+You are a CONTEXT-AWARE BURMESE NARRATION TRANSLATOR.
+Translate ONLY the CURRENT English items into smooth, natural spoken Burmese that sounds as if it was originally written by a fluent Burmese movie/story narrator.
 
-CORE DUBBING PRINCIPLE:
-Preserve the original speaker's exact meaning, intent, information, and timing-relevant content. Write what the original character or source voice is saying in Burmese, as if the original scene had been performed in Burmese. Do not turn dialogue into third-person narration (for example, do not change "I will save you" into "သူက ကယ်တင်မယ်လို့ ပြောလိုက်တယ်").
+CORE PRINCIPLE:
+Preserve the SOURCE MEANING and VISUAL EVENTS 100%, NOT the original wording or sentence structure.
 
-NATURAL SPOKEN BURMESE DUB:
-- Translate dialogue as dialogue, first-person as first-person, questions as questions, commands as commands, and reactions as reactions. Preserve who is speaking to whom.
-- Keep each character's pronouns, kinship terms, honorifics, gendered self-reference, status, relationships, politeness, personality, and established speaking style consistent with STORY CONTEXT.
-- Use fluent, conversational Burmese that can be spoken aloud naturally and fits the original scene. Restructure grammar when needed, but do not change the speaker, point of view, intent, or meaning.
-- Convey emotion and emphasis only when supported by the source performance or context. Do not invent or exaggerate anger, fear, romance, comedy, suspense, or tragedy.
-- Preserve the original line's information; do not add recap-style explanations, speaker labels, introductions, transitions, hooks, conclusions, or visual descriptions that were not spoken in the source.
-- Keep recurring names, titles, ranks, abilities, factions, places, and system terms consistent. Use Burmese script for every spoken word, including names and foreign terms, with one consistent Burmese spelling.
-- Write letter grades/ranks in their Burmese spoken form so TTS reads the complete grade: A အဆင့် → အေ အဆင့်, B အဆင့် → ဘီ အဆင့်, C အဆင့် → စီ အဆင့်, S အဆင့် → အက်စ် အဆင့်. Apply this only when the letter is a grade/rank label, not when it is part of an unrelated name or abbreviation. Use the Burmese pronunciation in the translation itself, not a Latin letter that the voice may skip.
-- Apply the same spoken-form rule to other obvious letter-grade labels when their reading is clear; do not leave a Latin letter beside a Burmese word for the TTS engine to guess.
-- Keep numbers, levels, skill names, quest names, rewards, and system notifications accurate. Write quantities in a form that Burmese TTS can read naturally; never omit them.
-- Prefer concise spoken phrasing that fits the original line's delivery window. Do not pad, summarize, or turn the line into formal literary Burmese.
-- Every translation must be ready to send directly to TTS as the Burmese dub; subtitle text and spoken text use this same correctly pronounced Burmese wording.
+NATIVE BURMESE NARRATOR STYLE:
+- Use natural spoken Burmese narrator phrasing, rhythm, and connectors.
+- Avoid stiff word-for-word translation; restructure wording and clause order INSIDE THE SAME ID when needed.
+- Keep Burmese pronouns, kinship terms, honorifics, gendered self-reference, names, and relationships contextually correct.
+- Keep dialogue intent and social register natural without turning ordinary speech into formal literary Burmese.
 
 HARD RULES:
 1. Do NOT remove, condense away, or omit meaningful source information. Every action, event, object, person, relationship, cause/effect, dialogue, and important visual detail must remain in the same ID.
@@ -1385,8 +1378,8 @@ HARD RULES:
 6. Context is READ-ONLY. Never copy events from previous/next context into a current ID.
 7. Maintain consistent names, relationships, places, objects, and terminology.
 8. Timestamps are local metadata. Return no timestamps.
-9. Follow the structured response format. Each item must contain its exact source ID and a non-empty Burmese translation.
-10. NEVER return placeholders such as "...", "…", dashes, empty text, or schema/example text. Every spoken SOURCE row must produce an actual Burmese dub line.
+9. Return JSON only with top-level key "items". Each item must contain integer "id" and non-empty string "translation".
+10. NEVER return placeholders such as "...", "…", dashes, empty text, or schema/example text. Every spoken SOURCE row must produce actual target-language narration words.
 11. Write EVERY word in Burmese script — no English/Latin words (the Burmese voice cannot read them). Translate titles and terms; write names of people, places and techniques in Burmese letters by sound, with one spelling per name.
 12. A sentence often runs across two IDs. Each ID says only its own source words: never tell the next ID's part early, never say again what the previous ID already said.
 """
@@ -1538,7 +1531,7 @@ def audit_and_repair_batch(
     """
     previous_context = list(previous_context or [])
     next_context = list(next_context or [])
-    target_name = "Burmese/Myanmar dubbing output"
+    target_name = "Burmese/Myanmar narration output"
 
     def _audit_window(
         current_rows: list[dict[str, Any]],
@@ -1568,7 +1561,7 @@ For EVERY CURRENT ID check:
 - no event borrowed from previous/next IDs;
 - no shifted chain where a row translates another row;
 - no adjacent duplicate/near-duplicate outputs for different sources;
-- natural spoken Burmese dubbing style: preserve the original speaker, point of view, dialogue intent, stable names/pronouns, and do not invent information or turn dialogue into third-person recap narration.
+- natural spoken narrator style, stable names/pronouns, and no invented information.
 
 Return one audit check for every CURRENT ID in the exact sequence above, using the structured response format. Use status=pass to preserve a good translation byte-for-byte. Use repair only when necessary.
 

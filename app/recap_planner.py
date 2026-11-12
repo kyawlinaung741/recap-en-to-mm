@@ -1354,27 +1354,24 @@ def translate_batch(
     source_language: str = "English",
 ) -> list[dict[str, Any]]:
     task_rules = """
-You are a CONTEXT-AWARE BURMESE NARRATION TRANSLATOR.
-Translate ONLY the CURRENT English items into smooth, natural spoken Burmese that sounds as if it was originally written by a fluent Burmese movie/story narrator.
+You are a CONTEXT-AWARE BURMESE DUB TRANSLATOR.
+Translate ONLY the CURRENT source items into a natural, complete Burmese DUB SCRIPT for the original story. This is direct localization/dubbing of the original film or episode — NOT a recap, summary, retelling, review, or a person watching the story and explaining it.
 
-CORE PRINCIPLE:
-Preserve the SOURCE MEANING and VISUAL EVENTS 100%, NOT the original wording or sentence structure.
+CORE DUBBING PRINCIPLE:
+Preserve the original speaker's exact meaning, intent, information, and timing-relevant content. Write what the original character or source voice is saying in Burmese, as if the original scene had been performed in Burmese. Do not turn dialogue into third-person narration (for example, do not change "I will save you" into "သူက ကယ်တင်မယ်လို့ ပြောလိုက်တယ်").
 
-NATIVE BURMESE NARRATOR STYLE:
-- Use natural spoken Burmese narrator phrasing, rhythm, and connectors.
-- Avoid stiff word-for-word translation; restructure wording and clause order INSIDE THE SAME ID when needed.
-- Keep Burmese pronouns, kinship terms, honorifics, gendered self-reference, names, and relationships contextually correct.
-- Keep dialogue intent and social register natural without turning ordinary speech into formal literary Burmese.
-
-PROFESSIONAL RECAP NARRATION:
-- Infer the story genre and setting ONLY from STORY CONTEXT and the source items (for example: modern drama, historical, fantasy, cultivation, action, survival, or game/system story). Let the genre guide vocabulary and register; never assume a genre from a name alone.
-- Use concise, fluent Burmese narration that is easy to understand when heard aloud. Prefer clear sentence flow and natural transitions over ornate or overly literary wording.
-- Preserve each character's established way of speaking, status, relationships, and level of politeness. Make dialogue sound natural in Burmese while retaining the original speaker's intent; do not add a speaker label unless the source makes it clear.
-- Convey emotion through accurate word choice and sentence tone only when the source supports it. Do not intensify anger, fear, romance, comedy, suspense, or tragedy beyond the evidence.
-- Keep recurring names, titles, ranks, abilities, factions, places, and game/system terms consistent with STORY CONTEXT. Prefer an established Burmese equivalent; if none exists, transliterate names consistently into Burmese script.
-- For ranks and letter grades, preserve the exact grade meaning and order. Do not silently change a rank, number, level, skill, quest, reward, or system notification.
-- Avoid repetitive connectors, unnecessary pronouns, awkward literal calques, and long winding sentences. Do not make the narration sound like a formal essay or a machine-translated subtitle.
-- Read each translation as spoken narration: it should be smooth aloud, but must remain faithful to the exact information assigned to that ID.
+NATURAL SPOKEN BURMESE DUB:
+- Translate dialogue as dialogue, first-person as first-person, questions as questions, commands as commands, and reactions as reactions. Preserve who is speaking to whom.
+- Keep each character's pronouns, kinship terms, honorifics, gendered self-reference, status, relationships, politeness, personality, and established speaking style consistent with STORY CONTEXT.
+- Use fluent, conversational Burmese that can be spoken aloud naturally and fits the original scene. Restructure grammar when needed, but do not change the speaker, point of view, intent, or meaning.
+- Convey emotion and emphasis only when supported by the source performance or context. Do not invent or exaggerate anger, fear, romance, comedy, suspense, or tragedy.
+- Preserve the original line's information; do not add recap-style explanations, speaker labels, introductions, transitions, hooks, conclusions, or visual descriptions that were not spoken in the source.
+- Keep recurring names, titles, ranks, abilities, factions, places, and system terms consistent. Use Burmese script for every spoken word, including names and foreign terms, with one consistent Burmese spelling.
+- Write letter grades/ranks in their Burmese spoken form so TTS reads the complete grade: A အဆင့် → အေ အဆင့်, B အဆင့် → ဘီ အဆင့်, C အဆင့် → စီ အဆင့်, S အဆင့် → အက်စ် အဆင့်. Apply this only when the letter is a grade/rank label, not when it is part of an unrelated name or abbreviation. Use the Burmese pronunciation in the translation itself, not a Latin letter that the voice may skip.
+- Apply the same spoken-form rule to other obvious letter-grade labels when their reading is clear; do not leave a Latin letter beside a Burmese word for the TTS engine to guess.
+- Keep numbers, levels, skill names, quest names, rewards, and system notifications accurate. Write quantities in a form that Burmese TTS can read naturally; never omit them.
+- Prefer concise spoken phrasing that fits the original line's delivery window. Do not pad, summarize, or turn the line into formal literary Burmese.
+- Every translation must be ready to send directly to TTS as the Burmese dub; subtitle text and spoken text use this same correctly pronounced Burmese wording.
 
 HARD RULES:
 1. Do NOT remove, condense away, or omit meaningful source information. Every action, event, object, person, relationship, cause/effect, dialogue, and important visual detail must remain in the same ID.

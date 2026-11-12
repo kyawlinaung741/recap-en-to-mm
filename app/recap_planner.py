@@ -1751,7 +1751,7 @@ def make_translation_plan(units: list[dict[str, Any]], video_duration: float, *,
     covered = assign_full_coverage_boundaries(units, video_duration)
     segments = []
     for unit in covered:
-        tr = _clean(unit.get("translation"))
+        tr = _normalize_spoken_burmese(_clean(unit.get("translation")))
         if not tr:
             raise RuntimeError(f"Missing translation for ID {unit.get('id')}")
         if _has_speakable_content(unit.get("source_text")) and not _has_speakable_content(tr):

@@ -364,6 +364,33 @@ def probe_duration(ffprobe: str, path: Path) -> float:
     return float(result.stdout.strip())
 
 
+def probe_wav_duration(ffprobe: str, path: Path) -> float:
+    """Read WAV duration from its integer sample-frame count, not rounded container timestamps."""
+    import wave
+
+    try:
+        with wave.open(str(path), "rb") as reader:
+            rate = int(reader.getframerate())
+            frames = int(reader.getnframes())
+        if rate > 0 and frames > 0:
+            return frames / float(rate)
+    except (wave.Error, EOFError, OSError):
+        pass
+    return probe_duration(ffprobe, path)
+
+
+def next_cumulative_frame_count(audio_end_seconds: float, frames_done: int, fps: int = 30) -> tuple[int, int]:
+    """Allocate frames from the absolute audio timeline; rounding error stays below half a frame."""
+    target_total = int(round(max(0.0, float(audio_end_seconds)) * int(fps)))
+    count = target_total - int(frames_done)
+    if count < 1:
+        raise ValueError(
+            f"Audio segment is too short to receive a video frame at {fps} fps "
+            f"(audio_end={audio_end_seconds:.9f}s, frames_done={frames_done})."
+        )
+    return count, target_total
+
+
 def _concat_list_line(path: Path) -> str:
     p = str(path.resolve()).replace("\\", "/")
     p = p.replace("'", "'\\''")
@@ -790,6 +817,7 @@ def render_video_part(
             "-map", out_label,
             *frame_lock,
             *_encoder_args(encoder, quality),
+            "-fps_mode", "cfr", "-r", "30", "-video_track_timescale", "30000",
             "-movflags", "+faststart", str(output),
         ]
     else:
@@ -806,6 +834,7 @@ def render_video_part(
             "-vf", vf,
             *frame_lock,
             *_encoder_args(encoder, quality),
+            "-fps_mode", "cfr", "-r", "30", "-video_track_timescale", "30000",
             "-movflags", "+faststart", str(output),
         ]
 
@@ -832,7 +861,15 @@ def render_video_part(
 def concat_video_parts(ffmpeg: str, parts: list[Path], output: Path, work_dir: Path) -> None:
     list_file = work_dir / "video_parts.txt"
     list_file.write_text("\n".join(_concat_list_line(p) for p in parts) + "\n", encoding="utf-8")
-    cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(list_file), "-c", "copy", "-movflags", "+faststart", str(output)]
+    # Every segment is encoded at CFR 30 fps with a 1/30000 MP4 time base.
+    # Keep that exact frame clock when remuxing thousands of parts; do not let
+    # per-file MP4 timescale rounding accumulate across a multi-hour timeline.
+    cmd = [
+        ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
+        "-f", "concat", "-safe", "0", "-i", str(list_file),
+        "-map", "0:v:0", "-c:v", "copy", "-video_track_timescale", "30000",
+        "-movflags", "+faststart", str(output),
+    ]
     result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     if result.returncode != 0:
         raise RuntimeError(f"Video concat failed:\n{result.stderr[-4000:]}")
@@ -1272,14 +1309,15 @@ class EdgeSmartSync:
         """
         try:
             video_len = probe_duration(self.ffprobe, paths.synced_video_noaudio)
-            audio_len = probe_duration(self.ffprobe, paths.voice)
+            audio_len = probe_wav_duration(self.ffprobe, paths.voice)
             diff = video_len - audio_len
             trimmed = 0
             for seg in segments:
                 sync = ((checkpoint.get("video") or {}).get(segment_basename(seg)) or {}).get("sync") or {}
                 if float(sync.get("applied_factor", 0.0) or 0.0) > float(sync.get("desired_factor", 0.0) or 0.0) + 1e-6:
                     trimmed += 1
-            status = "✅ SYNC OK" if abs(diff) <= 0.1 else "⚠️ SYNC DRIFT"
+            # One 30 fps frame is the maximum acceptable total mux timeline error.
+            status = "✅ SYNC OK" if abs(diff) <= (1.0 / 30.0 + 1.0 / 48000.0) else "⚠️ SYNC DRIFT"
             self.log(
                 f"{status}: picture={video_len:.2f}s · narration={audio_len:.2f}s · diff={diff:+.3f}s "
                 f"| {len(segments)} segments, {trimmed} speed-capped ({self.max_video_speed:g}x) + footage trimmed"
@@ -1361,7 +1399,7 @@ class EdgeSmartSync:
                 rec = dict(checkpoint["audio"].get(base, {}))
             reusable = rec.get("fingerprint") == fp and dst.is_file() and dst.stat().st_size > 1000
             if reusable:
-                duration = probe_duration(self.ffprobe, dst)
+                duration = probe_wav_duration(self.ffprobe, dst)
                 self.log(f"♻️ [{idx}/{len(segments)}] {base}.wav reuse ({duration:.2f}s)")
             else:
                 self.progress(idx - 1, len(segments), f"{tts_label} {idx}/{len(segments)}")
@@ -1388,7 +1426,7 @@ class EdgeSmartSync:
                 shutil.copy2(produced_path, dst)
                 if provider == "edge_tts":
                     produced_path.unlink(missing_ok=True)
-                duration = probe_duration(self.ffprobe, dst)
+                duration = probe_wav_duration(self.ffprobe, dst)
                 if duration <= 0.05:
                     raise RuntimeError(f"Generated audio duration invalid: {dst}")
                 with checkpoint_lock:
@@ -1410,14 +1448,17 @@ class EdgeSmartSync:
             start_time = producer_state["cursor"]
             end_time = start_time + duration
             producer_state["cursor"] = end_time
-            audio_end_frame = int(round(end_time * 30))
-            frame_count = max(1, audio_end_frame - int(producer_state["frames_done"]))
-            producer_state["frames_done"] += frame_count
+            frame_count, producer_state["frames_done"] = next_cumulative_frame_count(
+                end_time, int(producer_state["frames_done"]), fps=30
+            )
             item = {
                 "segment_id": seg["segment_id"], "source_index": seg["source_index"],
                 "video_start": seg["video_start"], "video_end": seg["video_end"],
-                "audio_start": round(start_time, 3), "audio_end": round(end_time, 3),
-                "audio_duration": round(duration, 3), "text": seg["narration"],
+                # Keep sub-millisecond precision in the absolute timeline. The
+                # WAV sample count is the clock; rounding each segment to 3 decimals
+                # can otherwise throw away measurable time across thousands of lines.
+                "audio_start": round(start_time, 6), "audio_end": round(end_time, 6),
+                "audio_duration": float(duration), "text": seg["narration"],
                 "audio_file": str(part),
             }
             self.progress(idx, len(segments), f"Audio {idx}/{len(segments)}")
@@ -1436,7 +1477,8 @@ class EdgeSmartSync:
                 "frame_count": frame_count, "source": str(source.resolve()),
                 "source_mtime": source.stat().st_mtime_ns,
                 "start": seg["video_start"], "end": seg["video_end"], "target": target,
-                "sync_mode": "hybrid_recap_distributed_freeze",
+                "sync_mode": "hybrid_recap_distributed_freeze_cfr30_v2",
+                "video_fps": 30, "video_track_timescale": 30000,
                 "max_speed": self.max_video_speed, "max_slow": self.max_video_slow,
                 "smooth_freeze": self.smooth_freeze_fallback, "max_freeze_hold": self.max_freeze_hold,
                 "mirror": self.mirror_video, "zoom": self.zoom_factor, "encoder": encoder,
@@ -1514,7 +1556,7 @@ class EdgeSmartSync:
             self.log(f"✂️ Short pauses: Edge TTS silence trimmed · voice {tts_total / 60:.1f} → {cursor / 60:.1f} min (~0.25 s between lines; picture never cut for it)")
         self.log("🔗 Timestamp audio parts concat...")
         concat_audio(self.ffmpeg, audio_parts, paths.voice, paths.work)
-        final_audio_duration = probe_duration(self.ffprobe, paths.voice)
+        final_audio_duration = probe_wav_duration(self.ffprobe, paths.voice)
         self.log(f"✅ {paths.voice.name} = {final_audio_duration:.2f}s")
         sync_segments = [
             {"video_start": item["video_start"], "video_end": item["video_end"],

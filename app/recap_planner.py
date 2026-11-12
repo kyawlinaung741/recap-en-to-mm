@@ -1368,6 +1368,7 @@ NATIVE BURMESE NARRATOR STYLE:
 - Avoid stiff word-for-word translation; restructure wording and clause order INSIDE THE SAME ID when needed.
 - Keep Burmese pronouns, kinship terms, honorifics, gendered self-reference, names, and relationships contextually correct.
 - Keep dialogue intent and social register natural without turning ordinary speech into formal literary Burmese.
+- Write letter grades/ranks in their Burmese spoken form so TTS reads the complete grade: A အဆင့် → အေ အဆင့်, B အဆင့် → ဘီ အဆင့်, C အဆင့် → စီ အဆင့်, S အဆင့် → အက်စ် အဆင့်. Apply this only when the letter is a grade/rank label, not an unrelated name or abbreviation.
 
 HARD RULES:
 1. Do NOT remove, condense away, or omit meaningful source information. Every action, event, object, person, relationship, cause/effect, dialogue, and important visual detail must remain in the same ID.

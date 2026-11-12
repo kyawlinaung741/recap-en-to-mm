@@ -21,8 +21,16 @@ class GeminiSchemaTests(unittest.TestCase):
                 self.assertEqual(properties[name]["items"]["type"], "STRING")
 
     def test_current_gemini_models_are_in_fallback_chain(self):
-        self.assertEqual(GEMINI_MODEL_FALLBACK_CHAIN[0], "gemini-3.8-flash")
-        self.assertIn("gemini-4-argon", GEMINI_MODEL_FALLBACK_CHAIN)
+        self.assertEqual(
+            GEMINI_MODEL_FALLBACK_CHAIN,
+            [
+                "gemini-3.5-flash",
+                "gemini-3.5-flash-lite",
+                "gemini-3.6-flash",
+                "gemini-3.7-flash",
+                "gemini-3.1-flash-lite",
+            ],
+        )
 
 
 if __name__ == "__main__":

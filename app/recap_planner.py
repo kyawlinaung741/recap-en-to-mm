@@ -1383,7 +1383,7 @@ HARD RULES:
 7. Maintain consistent names, relationships, places, objects, and terminology.
 8. Timestamps are local metadata. Return no timestamps.
 9. Follow the structured response format. Each item must contain its exact source ID and a non-empty Burmese translation.
-10. NEVER return placeholders such as "...", "…", dashes, empty text, or schema/example text. Every spoken SOURCE row must produce actual target-language narration words.
+10. NEVER return placeholders such as "...", "…", dashes, empty text, or schema/example text. Every spoken SOURCE row must produce an actual Burmese dub line.
 11. Write EVERY word in Burmese script — no English/Latin words (the Burmese voice cannot read them). Translate titles and terms; write names of people, places and techniques in Burmese letters by sound, with one spelling per name.
 12. A sentence often runs across two IDs. Each ID says only its own source words: never tell the next ID's part early, never say again what the previous ID already said.
 """
@@ -1533,7 +1533,7 @@ def audit_and_repair_batch(
     """
     previous_context = list(previous_context or [])
     next_context = list(next_context or [])
-    target_name = "Burmese/Myanmar narrator output"
+    target_name = "Burmese/Myanmar dubbing output"
 
     def _audit_window(
         current_rows: list[dict[str, Any]],
@@ -1563,7 +1563,7 @@ For EVERY CURRENT ID check:
 - no event borrowed from previous/next IDs;
 - no shifted chain where a row translates another row;
 - no adjacent duplicate/near-duplicate outputs for different sources;
-- natural spoken narrator style, stable names/pronouns, and no invented information.
+- natural spoken Burmese dubbing style: preserve the original speaker, point of view, dialogue intent, stable names/pronouns, and do not invent information or turn dialogue into third-person recap narration.
 
 Return one audit check for every CURRENT ID in the exact sequence above, using the structured response format. Use status=pass to preserve a good translation byte-for-byte. Use repair only when necessary.
 

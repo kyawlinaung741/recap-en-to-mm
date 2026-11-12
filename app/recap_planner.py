@@ -431,7 +431,7 @@ def _normalize_spoken_burmese(value: Any) -> str:
         else:
             number = _integer_to_myanmar_words(int(raw))
         return number + " ရာခိုင်နှုန်း"
-    text = re.sub(r"(?<![A-Za-z0-9])(\d[\d,]*(?:\.\d+)?)\s*%", percent, text)
+    text = re.sub(r"(?<![A-Za-z0-9])(-?\d[\d,]*(?:\.\d+)?)\s*%", percent, text)
     def number(match: re.Match[str]) -> str:
         raw = match.group(0).replace(",", "")
         if "." in raw:
@@ -440,7 +440,7 @@ def _normalize_spoken_burmese(value: Any) -> str:
                 _MYANMAR_NUMBER_WORDS[int(ch)] for ch in fraction
             )
         return _integer_to_myanmar_words(int(raw))
-    text = re.sub(r"(?<![A-Za-z0-9])\d[\d,]*(?:\.\d+)?(?![A-Za-z0-9])", number, text)
+    text = re.sub(r"(?<![A-Za-z0-9])-?\d[\d,]*(?:\.\d+)?(?![A-Za-z0-9])", number, text)
     text = text.replace("&", "နှင့်")
     return _clean(text)
 

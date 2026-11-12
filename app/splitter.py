@@ -3,7 +3,7 @@ blurred background), an optional text box and an optional "Part 1" label.
 
 Smart cut: when a part's time is up in the middle of speech, the cut waits for the next pause (up to
 `max_extra` seconds later, 20 by default) so no sentence is cut in two; off = exact N-minute cuts.
-Every part is re-encoded, so cuts land exactly on the planned time (stream copy would jump to key frames).
+Uses stream copy only when no visual filters/overlays are requested and both cut points align with keyframes; otherwise it re-encodes.
 No UI here: the Splitter tab (splitter_tab.py) calls split_video() from a thread.
 """
 from __future__ import annotations
@@ -12,6 +12,7 @@ import hashlib
 import json
 import subprocess
 import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Callable
 
@@ -190,15 +191,90 @@ def render_text_png(text: str, output: Path, font_size: int, max_width: int, box
     return output
 
 
+def _keyframe_near(ffprobe: str, source: str | Path, seconds: float, tolerance: float = 0.06) -> bool:
+    """True only when a video keyframe is very close to the requested cut point."""
+    if seconds <= tolerance:
+        return True
+    start = max(0.0, seconds - 0.35)
+    cmd = [ffprobe, "-v", "error", "-select_streams", "v:0", "-read_intervals",
+           f"{start:.3f}%+0.8", "-show_packets", "-show_entries", "packet=pts_time,flags",
+           "-of", "csv=p=0", str(source)]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                                timeout=12)
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    for line in result.stdout.splitlines():
+        fields = [x.strip() for x in line.split(",")]
+        try:
+            stamp = float(fields[0])
+        except (ValueError, IndexError):
+            continue
+        if len(fields) > 1 and "K" in fields[1] and abs(stamp - seconds) <= tolerance:
+            return True
+    return False
+
+
+def _stream_copy_part(ffmpeg: str, source: str | Path, start: float, end: float, output: Path,
+                      has_audio: bool, timeout: float, stop: threading.Event | None,
+                      procs: list | None) -> bool:
+    """Fast remux path. Caller has already verified keyframe-aligned boundaries."""
+    temp = output.with_name(output.stem + ".partial" + output.suffix)
+    cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{start:.3f}",
+           "-i", str(source), "-t", f"{max(0.05, end - start):.3f}", "-map", "0:v:0"]
+    if has_audio:
+        cmd += ["-map", "0:a:0?"]
+    else:
+        cmd += ["-an"]
+    cmd += ["-c", "copy", "-avoid_negative_ts", "make_zero", "-movflags", "+faststart", str(temp)]
+    proc = None
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                text=True, encoding="utf-8", errors="replace")
+        if procs is not None:
+            procs.append(proc)
+        _, err = proc.communicate(timeout=timeout)
+        if stop is not None and stop.is_set():
+            raise InterruptedError("Stopped")
+        if proc.returncode == 0 and temp.is_file() and temp.stat().st_size >= 2000:
+            temp.replace(output)
+            return True
+        if err:
+            return False
+        return False
+    except subprocess.TimeoutExpired:
+        if proc is not None:
+            proc.kill()
+            proc.communicate()
+        return False
+    finally:
+        if proc is not None and procs is not None and proc in procs:
+            procs.remove(proc)
+        temp.unlink(missing_ok=True)
+
+
 def render_part(ffmpeg: str, source: str | Path, start: float, end: float, output: Path, *,
                 layout: dict[str, Any], overlays: list[dict[str, Any]], encoder: str, has_audio: bool,
-                quality: str = "1080",
+                quality: str = "1080", ffprobe: str | None = None, allow_stream_copy: bool = False,
+                timeout_seconds: float | None = None,
                 on_time: Callable[[float], None] | None = None, stop: threading.Event | None = None,
-                procs: list | None = None) -> None:
-    """One part: exact start/end, frame layout, PNG overlays at their 0..1 centre positions, AAC sound."""
+                procs: list | None = None) -> str:
+    """Render one part. Returns 'stream-copy', 'h264_nvenc', or 'libx264'."""
+    length = max(0.05, end - start)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    temp = output.with_name(output.stem + ".partial" + output.suffix)
+    # Stream copy is safe only for an untouched Original frame and keyframe-aligned boundaries.
+    if allow_stream_copy and not overlays and ffprobe and _keyframe_near(ffprobe, source, start) and \
+            _keyframe_near(ffprobe, source, end):
+        if _stream_copy_part(ffmpeg, source, start, end, output, has_audio,
+                             min(180.0, timeout_seconds or max(60.0, length * 2.0)), stop, procs):
+            return "stream-copy"
+        if stop is not None and stop.is_set():
+            raise InterruptedError("Stopped")
+
     vf, _zoom = _visual_filters(False, 1.0, layout)
     cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-ss", f"{start:.3f}",
-           "-t", f"{max(0.05, end - start):.3f}", "-i", str(source)]       # -t before -i: limits this input
+           "-t", f"{length:.3f}", "-i", str(source)]
     graph = [f"[0:v]{vf}[base]"]
     current = "[base]"
     for i, item in enumerate(overlays, start=1):
@@ -212,38 +288,37 @@ def render_part(ffmpeg: str, source: str | Path, start: float, end: float, outpu
     graph.append(f"{current}format=yuv420p[vout]")
     cmd += ["-filter_complex", ";".join(graph), "-map", "[vout]"]
     sound = ["-map", "0:a:0", "-c:a", "aac", "-b:a", "192k"] if has_audio else ["-an"]
-    output.parent.mkdir(parents=True, exist_ok=True)
-    temp = output.with_name(output.stem + ".partial" + output.suffix)
 
-    def run(codec: list[str]) -> tuple[int, str]:
-        full = cmd + sound + codec + ["-movflags", "+faststart", "-progress", "pipe:1", "-nostats", str(temp)]
-        proc = subprocess.Popen(full, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-                                encoding="utf-8", errors="replace")
+    def run(codec: list[str], timeout: float) -> tuple[int, str]:
+        temp.unlink(missing_ok=True)
+        full = cmd + sound + codec + ["-movflags", "+faststart", str(temp)]
+        proc = subprocess.Popen(full, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE,
+                                text=True, encoding="utf-8", errors="replace")
         if procs is not None:
             procs.append(proc)
-        err: list[str] = []
-        reader = threading.Thread(target=lambda: err.append(proc.stderr.read()), daemon=True)
-        reader.start()
-        for line in proc.stdout:
-            if stop is not None and stop.is_set():
-                proc.kill()
-                break
-            if line.startswith("out_time_ms=") and on_time is not None:
-                try:
-                    on_time(int(line.split("=", 1)[1]) / 1_000_000.0)
-                except ValueError:
-                    pass
-        code = proc.wait()
-        reader.join(timeout=5)
-        proc.stdout.close()
-        proc.stderr.close()
-        if procs is not None and proc in procs:
-            procs.remove(proc)
-        return code, "".join(err)
+        try:
+            _, err = proc.communicate(timeout=timeout)
+            return proc.returncode, err or ""
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            _, err = proc.communicate()
+            return -9, f"Render timeout after {timeout:.0f}s. {err or ''}"
+        finally:
+            if procs is not None and proc in procs:
+                procs.remove(proc)
 
-    code, err = run(encoder_args(encoder, quality))
-    if code != 0 and encoder != "libx264" and not (stop is not None and stop.is_set()):
-        code, err = run(encoder_args("libx264", quality))       # NVENC busy / missing on this PC: CPU encoder
+    gpu_timeout = timeout_seconds or max(90.0, length * 3.0)
+    cpu_timeout = max(180.0, length * 8.0)
+    code, err = run(encoder_args(encoder, quality), gpu_timeout)
+    used = encoder
+    if stop is not None and stop.is_set():
+        temp.unlink(missing_ok=True)
+        raise InterruptedError("Stopped")
+    if code != 0 and encoder != "libx264":
+        log_message = f"⚠️ {output.name}: NVENC failed/timed out; retrying this part with CPU."
+        # No global encoder change: the next part attempts NVENC again.
+        code, err = run(encoder_args("libx264", quality), cpu_timeout)
+        used = "libx264"
     if stop is not None and stop.is_set():
         temp.unlink(missing_ok=True)
         raise InterruptedError("Stopped")
@@ -251,6 +326,9 @@ def render_part(ffmpeg: str, source: str | Path, start: float, end: float, outpu
         temp.unlink(missing_ok=True)
         raise RuntimeError(f"ffmpeg could not make {output.name}: {err[-1500:]}")
     temp.replace(output)
+    if on_time is not None:
+        on_time(length)
+    return used
 
 
 def parts_folder(source: Path, output_root: str | Path | None) -> Path:
@@ -330,7 +408,12 @@ def split_video(source: str | Path, settings: dict[str, Any], *, ffmpeg: str, ff
     except Exception:
         state = {}
     done: list[Path] = []
-    finished = 0.0
+    completed_seconds = 0.0
+    state_lock = threading.Lock()
+    workers = max(1, min(2, int(settings.get("parallel_workers", 2) or 1)))
+    untouched_original = ratio.casefold() == "original"
+    jobs: list[tuple[dict[str, Any], Path, str, list[dict[str, Any]]]] = []
+
     for p in parts:
         if stop is not None and stop.is_set():
             raise InterruptedError("Stopped")
@@ -338,11 +421,10 @@ def split_video(source: str | Path, settings: dict[str, Any], *, ffmpeg: str, ff
         label = part_label(str(settings.get("label_template") or "Part {n}"), p["n"], total) \
             if settings.get("label_on") else ""
         key = _fingerprint(source, p, settings, label)
-        length = p["end"] - p["start"]
         if out.is_file() and state.get(out.name) == key:
             log(f"♻️ Part {p['n']}/{total} already made — kept")
             done.append(out)
-            finished += length
+            completed_seconds += p["end"] - p["start"]
             continue
         overlays = list(fixed)
         if label:
@@ -351,19 +433,53 @@ def split_video(source: str | Path, settings: dict[str, Any], *, ffmpeg: str, ff
                                   int(cw * 0.6), bool(settings.get("label_box", True)))
             overlays.append({"png": png, "pos": settings.get("label_pos") or [0.5, 0.1],
                              "opacity": settings.get("label_opacity", 1.0)})
+        jobs.append((p, out, key, overlays))
+
+    log(f"⚙️ Parallel workers: {workers} · NVENC first · CPU fallback per failed part")
+    allow_copy = untouched_original and not fixed and not settings.get("label_on", False)
+    if allow_copy:
+        log("⚡ Stream Copy enabled only for keyframe-aligned cuts without overlays")
+
+    def render_job(job):
+        p, out, key, overlays = job
+        if stop is not None and stop.is_set():
+            raise InterruptedError("Stopped")
         log(f"🎞️ Part {p['n']}/{total} …")
+        used = render_part(
+            ffmpeg, source, p["start"], p["end"], out, layout=layout, overlays=overlays, encoder=encoder,
+            has_audio=has_audio, ffprobe=ffprobe, allow_stream_copy=allow_copy,
+            timeout_seconds=max(90.0, (p["end"] - p["start"]) * 3.0),
+            stop=stop, procs=procs, quality=quality)
+        return p, out, key, used
 
-        def on_time(sec: float, base=finished, n=p["n"]) -> None:
-            if progress is not None:
-                progress(min(1.0, (base + min(sec, length)) / max(0.1, duration)), f"Part {n}/{total}")
-
-        render_part(ffmpeg, source, p["start"], p["end"], out, layout=layout, overlays=overlays, encoder=encoder,
-                    has_audio=has_audio, on_time=on_time, stop=stop, procs=procs, quality=quality)
-        state[out.name] = key
-        state_file.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-        done.append(out)
-        finished += length
-        log(f"✅ {out.name}")
+    if jobs:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="split-render") as pool:
+            futures = {pool.submit(render_job, job): job for job in jobs}
+            try:
+                for future in as_completed(futures):
+                    if stop is not None and stop.is_set():
+                        for pending in futures:
+                            pending.cancel()
+                        raise InterruptedError("Stopped")
+                    p, out, key, used = future.result()
+                    with state_lock:
+                        state[out.name] = key
+                        state_file.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+                        done.append(out)
+                        completed_seconds += p["end"] - p["start"]
+                        if progress is not None:
+                            progress(min(1.0, completed_seconds / max(0.1, duration)),
+                                     f"Part {p['n']}/{total} · {used}")
+                    log(f"✅ {out.name} · {used}")
+            except Exception:
+                if stop is not None:
+                    stop.set()
+                for proc in list(procs or []):
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                raise
     # parts this tool made earlier for a different plan (e.g. 3-min parts before 5-min ones) are removed
     keep = {x.name for x in done}
     for name in [n for n in state if n not in keep]:

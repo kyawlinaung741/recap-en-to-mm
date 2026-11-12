@@ -474,6 +474,13 @@ def split_video(source: str | Path, settings: dict[str, Any], *, ffmpeg: str, ff
                                      f"Part {p['n']}/{total} · {used}")
                     log(f"✅ {out.name} · {used}")
             except Exception:
+                if stop is not None and stop.is_set():
+                    for proc in list(procs or []):
+                        try:
+                            proc.kill()
+                        except Exception:
+                            pass
+                    raise InterruptedError("Stopped")
                 if stop is not None:
                     stop.set()
                 for proc in list(procs or []):

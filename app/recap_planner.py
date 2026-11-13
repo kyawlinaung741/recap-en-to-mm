@@ -1839,8 +1839,6 @@ def audit_and_repair_batch(
     previous_context: list[dict[str, Any]] | None = None,
     next_context: list[dict[str, Any]] | None = None,
     log: LogFn,
-    glm_api_key: str = "",
-    glm_model: str = "glm-4.7-flash",
     azure_api_key: str = "",
     azure_endpoint: str = "",
     azure_deployment: str = "",

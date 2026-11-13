@@ -42,6 +42,7 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         self.assertEqual(out[0]["translation"], "သူ အိမ်ပြန်လာခဲ့တယ်။")
         self.assertIn("BURMESE NARRATION TRANSLATOR", prompts[0])
         self.assertIn("Translate ONLY the CURRENT English items", prompts[0])
+        self.assertIn("For Chinese personal names, write their sounds in Burmese script", prompts[0])
 
     def test_letters_of_another_script_are_asked_again(self):
         answers = [{"items": [{"id": 1, "translation": "მისခန်းထဲမှာ မီးခိုးတွေ"}]},

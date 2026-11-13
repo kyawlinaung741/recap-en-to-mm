@@ -1365,6 +1365,7 @@ NATIVE BURMESE NARRATOR STYLE:
 - Avoid stiff word-for-word translation; restructure wording and clause order INSIDE THE SAME ID when needed.
 - Keep Burmese pronouns, kinship terms, honorifics, gendered self-reference, names, and relationships contextually correct.
 - Keep dialogue intent and social register natural without turning ordinary speech into formal literary Burmese.
+- For Chinese personal names, write their sounds in Burmese script; never translate the meaning.
 
 HARD RULES:
 1. Do NOT remove, condense away, or omit meaningful source information. Every action, event, object, person, relationship, cause/effect, dialogue, and important visual detail must remain in the same ID.
@@ -1557,6 +1558,7 @@ For EVERY CURRENT ID check:
 - no shifted chain where a row translates another row;
 - no adjacent duplicate/near-duplicate outputs for different sources;
 - natural spoken narrator style, stable names/pronouns, and no invented information.
+- For Chinese personal names, write their sounds in Burmese script; never translate the meaning.
 
 Return one audit check for every CURRENT ID in the exact sequence above, using the structured response format. Use status=pass to preserve a good translation byte-for-byte. Use repair only when necessary.
 

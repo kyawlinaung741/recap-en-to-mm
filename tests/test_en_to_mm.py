@@ -249,16 +249,17 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as folder:
             checkpoint = Path(folder) / "story_context_checkpoint.json"
-            with mock.patch.object(rp, "_mimo_chat_json", side_effect=mimo_failure):
-                with mock.patch.object(rp, "_gemini_json", side_effect=gemini_answer):
-                    context = rp.build_story_context(
-                        None, [_unit(1, 0.0, 2.0, "陈阳来到红星饭店。")],
-                        batch_max_items=10, log=lambda _m: None,
-                        should_stop=lambda: False, checkpoint_path=checkpoint,
-                        source_fingerprint="gemini-fallback-test", reuse=False,
-                        mimo_api_key="test-key", mimo_model="mimo-v2.6-pro",
-                        source_language="Chinese",
-                    )
+            with mock.patch.object(rp.time, "sleep"):
+                with mock.patch.object(rp, "_mimo_chat_json", side_effect=mimo_failure):
+                    with mock.patch.object(rp, "_gemini_json", side_effect=gemini_answer):
+                        context = rp.build_story_context(
+                            None, [_unit(1, 0.0, 2.0, "陈阳来到红星饭店。")],
+                            batch_max_items=10, log=lambda _m: None,
+                            should_stop=lambda: False, checkpoint_path=checkpoint,
+                            source_fingerprint="gemini-fallback-test", reuse=False,
+                            mimo_api_key="test-key", mimo_model="mimo-v2.6-pro",
+                            source_language="Chinese",
+                        )
         self.assertEqual(context["name_glossary"][0]["burmese_name"], "ချန်ယမ်")
         self.assertEqual(len(mimo_prompts), 3)
         self.assertEqual(len(gemini_prompts), 1)

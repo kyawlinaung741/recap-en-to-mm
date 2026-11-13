@@ -1618,15 +1618,24 @@ CRITICAL ID PROTOCOL:
 - Return exactly {len(expected_ids)} checks.
 - The exact required CURRENT ID sequence is: {exact_ids_json}
 
-For EVERY CURRENT ID check:
-- semantic completeness: no meaningful source information omitted or condensed away;
-- no event borrowed from previous/next IDs;
-- no shifted chain where a row translates another row;
-- no adjacent duplicate/near-duplicate outputs for different sources;
-- natural spoken narrator style, stable names/pronouns, and no invented information.
-- For Chinese personal names, write their sounds in Burmese script; never translate the meaning.
+For EVERY CURRENT ID, perform a careful source-to-translation comparison. SOURCE is the authority; STORY CONTEXT is supporting reference only. Audit these dimensions separately:
+1. PLOT AND FACTS: preserve every action, event, object, person, location, time/order clue, condition, cause/effect, intention, result, and meaningful visual detail. Do not omit, summarize, soften, exaggerate, or invent.
+2. DIALOGUE MEANING: preserve what the speaker actually says, including questions, answers, requests, commands, refusals, promises, warnings, accusations, jokes, sarcasm, and implied intent. Do not turn dialogue into a narrator's explanation or change who said/did what.
+3. CHARACTER VOICE AND RELATIONSHIPS: keep each character's identity, gender where established, name spelling, aliases, kinship terms, honorifics, pronouns, forms of address, and relative status consistent with STORY CONTEXT and surrounding lines. Do not guess an unknown speaker or relationship; retain a neutral natural Burmese phrasing when uncertain.
+4. EMOTION AND TONE: preserve the source's emotional force and register (for example anger, fear, affection, embarrassment, urgency, teasing, politeness). Do not make a calm line dramatic or a serious line comedic.
+5. PRECISION: check negation, who/whom, singular/plural, numbers, quantities, names, places, titles, comparisons, and key terms. A small change in any of these can change the plot.
+6. BURMESE QUALITY: output fluent, natural spoken Myanmar Burmese suitable for narration; keep the original intent and character tone rather than translating mechanically. Chinese personal names must be transliterated into consistent Burmese sounds, never translated by meaning.
+7. ID BOUNDARIES: each translation must contain only the meaning belonging to its own SOURCE ID. Do not move a fact or dialogue across IDs, repeat a neighbouring line, merge/split IDs, or translate a neighbouring ID early. PREVIOUS/NEXT are read-only context.
+8. COMPLETENESS: every meaningful part of the source must be represented. Do not accept a vague Burmese sentence that merely captures the general idea while losing specific details.
 
-Return one audit check for every CURRENT ID in the exact sequence above, using the structured response format. Use status=pass to preserve a good translation byte-for-byte. Use repair only when necessary.
+DECISION RULE:
+- status=pass ONLY if the translation faithfully preserves all material meaning, dialogue intent, character identity/voice, tone, and details, and is already natural Burmese. Keep it byte-for-byte unchanged.
+- status=repair if ANY material detail is missing, added, mistranslated, assigned to the wrong character, inconsistent with context, unnatural enough to distort meaning, or has the wrong tone/register. Do not pass a line merely because its general topic is correct.
+- For repair, rewrite the ENTIRE translation for that same ID in clear natural Burmese. Preserve every source detail; do not add explanations, audit notes, alternatives, or content from other IDs.
+- If source wording is ambiguous, do not invent a resolution. Preserve the ambiguity naturally and use context only when it clearly resolves it.
+- Do not make stylistic edits to a faithful, natural translation just to express a personal preference.
+
+Return one audit check for every CURRENT ID in the exact sequence above, using the structured response format. Use status=pass to preserve a good translation byte-for-byte. Use status=repair only when a correction is genuinely needed.
 
 STORY CONTEXT:
 {json.dumps(story_context, ensure_ascii=False)}

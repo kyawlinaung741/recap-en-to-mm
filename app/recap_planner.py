@@ -1389,6 +1389,14 @@ def build_story_context(
                     completed = 0
         except Exception:
             completed = 0
+
+    # Normalize older checkpoints that predate the structured glossary field.
+    memory["name_glossary"] = _merge_name_glossary(
+        list(memory.get("name_glossary") or []),
+        [],
+        legacy_entries=memory.get("name_consistency") or [],
+        log=log,
+    )
     for i, batch in enumerate(batches, 1):
         if i <= completed:
             continue
@@ -2293,6 +2301,17 @@ class RecapPlanBuilder:
                             clean_saved = dict(saved_row)
                             clean_saved["translation"] = tr
                             safe_prefix.append(clean_saved)
+
+                        # Cached translations are not trusted if they violate this movie's canonical names.
+                        valid_prefix: list[dict[str, Any]] = []
+                        for src, saved_row in zip(units, safe_prefix):
+                            if _character_name_issues(
+                                [src], [saved_row], list(story_context.get("name_glossary") or [])
+                            ):
+                                bad_id = int(src["id"])
+                                break
+                            valid_prefix.append(saved_row)
+                        safe_prefix = valid_prefix
 
                         translated_all = safe_prefix
                         ignored_obsolete = max(0, len(saved_items) - len(safe_prefix))

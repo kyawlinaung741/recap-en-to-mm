@@ -1,7 +1,7 @@
 # Recap → Myanmar (+ Splitter)
 
 **English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … ဘယ်ဘာသာနဲ့ ပြောထားတဲ့ recap / ဇာတ်လမ်းပြော video ကိုမဆို မြန်မာအသံနဲ့ ပြန်ထုတ်ပေးတဲ့ Windows tool**
-Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
+Narrator only · Whisper + Ollama (Qwen3:4b) + Gemini Context/Audit · Microsoft Edge TTS (Myanmar) · Smart Sync
 **Splitter** tab — ရှည်တဲ့ video ကို မိနစ်အလိုက် အပိုင်းခွဲ (Ratio + blur နောက်ခံ၊ စာ၊ Part နံပါတ်)
 
 > English: turns a recap/story video narrated in English, Chinese, Hindi, Korean … (detected by itself)
@@ -19,7 +19,7 @@ Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
    - ဟိန္ဒီနဲ့ Urdu က အသံတူလို့ Auto-detect မှာ Urdu ထွက်ရင် ဟိန္ဒီအဖြစ် ရေးတယ်။
 2. **အပိုင်းခွဲ** — စာကြောင်း၊ အပိုဒ်၊ အသံရပ်တဲ့နေရာတွေမှာ ခွဲပြီး အပိုင်းတိုင်းကို ၄.၂ စက္ကန့်လောက် (အများဆုံး ၅.၆ စက္ကန့်) ထားတယ်။ အပိုင်းများလေ ရုပ်နဲ့ အသံ ပိုကိုက်လေပါ။
 3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Gemini က ဇာတ်လမ်းတစ်ခုလုံးကို အရင်ဖတ်ပြီး ဇာတ်ကောင်နာမည်၊ ဆက်နွယ်မှု၊ နေရာတွေကို မှတ်ထားတယ်။ ဒါကြောင့် နာမည်တွေ တစ်ပုဒ်လုံး တစ်မျိုးတည်း ဖြစ်တယ်။
-4. **ဘာသာပြန်** — Gemini က တစ်ခါမှာ အပိုင်း ၄၀ စီ မြန်မာလို ပြန်တယ်။
+4. **ဘာသာပြန်** — စက်ထဲက Ollama `qwen3:4b` က အပိုင်း ၄၀ စီ မြန်မာလို ပြန်တယ်။ ဘာသာပြန်စာသားတွေကို Gemini က audit လုပ်ပြီး အမှားရှိတဲ့အပိုင်းကိုသာ ပြင်ဆင်တယ်။
    - ဇာတ်ကြောင်းပြောသူလို သဘာဝကျတဲ့ စကားပြောပုံစံနဲ့ ပြန်တယ်။
    - အကျဉ်းမချုပ်ဘူး၊ ချန်မထားဘူး။ အပိုင်းတစ်ခုရဲ့ အကြောင်းအရာကို ဘေးအပိုင်းထဲ မရွှေ့ဘူး။
    - ပြန်ပြီးတိုင်း စစ်ဆေးတဲ့အဆင့် (audit) က ချန်ခဲ့တာ၊ နေရာလွဲတာ၊ ထပ်နေတာတွေကို ပြန်ပြင်တယ်။
@@ -38,7 +38,7 @@ Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
 | Python | **3.12, 64-bit** — [python.org](https://www.python.org/downloads/) ကနေ သွင်းပါ။ "Add python.exe to PATH" နဲ့ "tcl/tk" ကို အမှန်ခြစ်ပါ |
 | FFmpeg | `ffmpeg.exe` + `ffprobe.exe` — မရှိရင် `INSTALL_REQUIREMENTS.bat` က အလိုလို download လုပ်ပေးတယ် ([gyan.dev builds](https://www.gyan.dev/ffmpeg/builds/)) |
 | Gemini API key | အခမဲ့ ရတယ် — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
-| Internet | Gemini နဲ့ Edge TTS အတွက် |
+| Internet | ပထမဆုံး setup မှာ Ollama/model download၊ Gemini Story Context/Audit နဲ့ Edge TTS အတွက် |
 | NVIDIA GPU | မဖြစ်မနေ မလိုဘူး။ ရှိရင် Whisper နဲ့ video render ပိုမြန်တယ် (NVENC)။ မရှိရင် CPU နဲ့ အလိုလို လုပ်တယ် |
 
 ## ထည့်သွင်းနည်း (တစ်ခါပဲ လုပ်ရ)
@@ -52,6 +52,11 @@ Narrator only · Whisper + Gemini · Microsoft Edge TTS (Myanmar) · Smart Sync
 4. **`.env.example`** ကို **`.env`** လို့ copy ကူးပါ။ ပြီးရင် ဖွင့်ပြီး key ထည့်ပါ:
    ```ini
    GEMINI_API_KEY=ကိုယ့်_key
+
+# Ollama translation defaults (optional)
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_MODEL=qwen3:4b
+OLLAMA_TIMEOUT_SECONDS=240
    ```
    Key တစ်ခုထက် ပိုထည့်ချင်ရင် App ကိုဖွင့်ပြီး အပေါ်ဘက် **API Keys** ခလုတ်ကို နှိပ်ပါ။ အဲဒီနေရာမှာ Key 1၊ Key 2၊ Key 3 ဆိုပြီး အကွက် ၃ ခုရှိပါတယ်။ Google AI Studio က ရထားတဲ့ Key တွေကို အကွက်တစ်ခုစီမှာ ကူးထည့်ပြီး **Save Keys** နှိပ်ပါ။ `.env` ဖိုင်ထဲကို အလိုအလျောက် သိမ်းပေးပြီး နောက်တစ်ကြိမ် **START / RESUME** နှိပ်တဲ့အခါ သုံးပါတယ်။ Key တစ်ခုရဲ့ quota ပြည့်သွားရင် နောက် Key ကို အလိုအလျောက် ပြောင်းသုံးပါတယ်။ လက်ရှိ run နေတဲ့အလုပ်အတွင်း Key ပြောင်းထားရင် နောက်တစ်ကြိမ် START / RESUME မှာ စတင်သက်ရောက်ပါမယ်။
 

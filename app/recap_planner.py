@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[int, int, str], None]
-PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v5_azure_foundry_story_translation"
+PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v6_gemini_only"
 TRANSLATION_DIRECTION = "en_to_mm"   # an English video's direction; others are "<code>_to_mm" (2026-10-17)
 # Whole-sentence lines like VOXCPM recap (2026-10-12): a line ends at a sentence end (or a clause after 6.5 s,
 # a breath after 10 s, at most 24 s). The old 4-6 s lines cut 20-35% of sentences in two, and Gemini then told a
@@ -1463,10 +1463,7 @@ def build_story_context(
     azure_deployment: str = "",
     source_language: str = "Chinese",
 ) -> dict[str, Any]:
-    """Azure AI Foundry builds movie-wide context first; Gemini is the fallback context builder."""
-    use_azure = bool(str(azure_api_key or "").strip() and str(azure_endpoint or "").strip() and str(azure_deployment or "").strip())
-    if not use_azure:
-        log("⚠️ Azure AI Foundry credentials မပြည့်စုံပါ — Story Context ကို Gemini နဲ့ တည်ဆောက်မယ်။")
+    """Build movie-wide context using Gemini only."""
     batches = _batch_by_size(units, max_items=batch_max_items, max_chars=24000)
     memory: dict[str, Any] = {
         "characters": [], "relationships": [], "places": [], "terms": [],
@@ -1483,7 +1480,7 @@ def build_story_context(
                 if 0 <= completed <= len(batches) and isinstance(saved_memory, dict):
                     memory = saved_memory
                     if completed:
-                        log(f"♻️ Azure/Gemini Story Context resume — {completed}/{len(batches)} batches already done")
+                        log(f"♻️ Gemini Story Context resume — {completed}/{len(batches)} batches already done")
                 else:
                     completed = 0
         except Exception:
@@ -1538,53 +1535,28 @@ SOURCE CHUNK {i}/{len(batches)}:
 """
         last_error = None
         data = None
-        context_provider = "Azure AI Foundry"
         required = ("characters", "relationships", "places", "terms", "plot_state",
                     "name_consistency", "name_glossary", "unresolved")
-        if use_azure:
-            for attempt in range(1, 4):
-                try:
-                    data = _azure_foundry_chat_json(azure_api_key, azure_endpoint, azure_deployment, prompt)
-                    if any(not isinstance(data.get(k), list) for k in required):
-                        raise ValueError("Azure AI Foundry Story Context JSON is missing required list fields")
-                    log(f"🧠 Azure AI Foundry Story Context {i}/{len(batches)} completed")
-                    break
-                except InterruptedError:
-                    raise
-                except Exception as exc:
-                    data = None
-                    last_error = exc
-                    log(f"⚠️ Azure AI Foundry Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
-                    if attempt < 3:
-                        time.sleep(attempt * 1.5)
+        for attempt in range(1, 4):
+            if should_stop():
+                raise InterruptedError("STOP requested during Gemini Story Context")
+            try:
+                data = _gemini_json(ai, prompt, retries=1, log=log,
+                                    response_schema=_STORY_CONTEXT_RESPONSE_SCHEMA)
+                if any(not isinstance(data.get(k), list) for k in required):
+                    raise ValueError("Gemini Story Context JSON is missing required list fields")
+                log(f"🧠 Gemini Story Context {i}/{len(batches)} completed")
+                break
+            except InterruptedError:
+                raise
+            except Exception as exc:
+                data = None
+                last_error = exc
+                log(f"⚠️ Gemini Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
+                if attempt < 3:
+                    time.sleep(attempt * 1.5)
         if data is None:
-            context_provider = "Gemini fallback"
-            log(f"🛟 Azure AI Foundry Story Context unavailable for chunk {i}; Gemini is taking over this context chunk.")
-            for attempt in range(1, 4):
-                if should_stop():
-                    raise InterruptedError("STOP requested during Gemini Story Context fallback")
-                try:
-                    data = _gemini_json(
-                        ai, prompt, retries=1, log=log,
-                        response_schema=_STORY_CONTEXT_RESPONSE_SCHEMA,
-                    )
-                    if any(not isinstance(data.get(k), list) for k in required):
-                        raise ValueError("Gemini Story Context JSON is missing required list fields")
-                    log(f"🧠 Gemini Story Context fallback {i}/{len(batches)} completed")
-                    break
-                except InterruptedError:
-                    raise
-                except Exception as exc:
-                    data = None
-                    last_error = exc
-                    log(f"⚠️ Gemini Story Context fallback {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
-                    if attempt < 3:
-                        time.sleep(attempt * 1.5)
-        if data is None:
-            raise RuntimeError(
-                f"Azure AI Foundry နှင့် Gemini Story Context နှစ်ခုလုံး chunk {i}/{len(batches)} မအောင်မြင်ပါ။ "
-                f"ဘာသာပြန်မှုကို မစတင်ပါ။ နောက်ဆုံးအမှား: {last_error}"
-            ) from last_error
+            raise RuntimeError(f"Gemini Story Context chunk {i}/{len(batches)} failed: {last_error}") from last_error
 
         memory = {
             "characters": list(dict.fromkeys(list(memory.get("characters") or []) + list(data.get("characters") or []))),
@@ -1734,25 +1706,7 @@ CRITICAL OUTPUT ID PROTOCOL:
 {json.dumps([int(x["id"]) for x in current], ensure_ascii=False)}
 - Before responding, verify that items[].id exactly equals that sequence.
 """
-    # Azure AI Foundry is the primary translator for this test branch.
-    if azure_api_key and azure_endpoint and azure_deployment:
-        azure_prompt = prompt
-        for azure_attempt in range(1, 4):
-            try:
-                log(f"☁️ Azure AI Foundry translation primary attempt {azure_attempt}/3 for IDs "
-                    f"{int(current[0]['id']):05d}-{int(current[-1]['id']):05d}")
-                azure_payload = _azure_foundry_chat_json(
-                    azure_api_key, azure_endpoint, azure_deployment, azure_prompt
-                )
-                return _validate_translation_candidate(
-                    current, azure_payload, story_context=story_context,
-                    previous_context=previous_context, next_context=next_context, log=log,
-                )
-            except Exception as azure_exc:
-                log(f"⚠️ Azure AI Foundry translation attempt {azure_attempt}/3 failed: {azure_exc}")
-                azure_prompt += f"\n\nCORRECTION REQUIRED: {azure_exc}. Return the entire batch again."
-                if azure_attempt < 3:
-                    time.sleep(1.2 * azure_attempt)
+    # Gemini is the only online text provider.
 
     last: Exception | None = None
     for attempt in range(1, 5):
@@ -1809,7 +1763,6 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
-            azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_deployment,
         )
         right_prev = (list(previous_context or []) + translated_left)[-context_limit:]
         translated_right = translate_batch(
@@ -1821,7 +1774,6 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
-            azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_deployment,
         )
         combined = translated_left + translated_right
         _assert_no_adjacent_translation_duplicates(combined, list(previous_context or []))
@@ -1905,20 +1857,12 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
 """
         prompt = base_prompt
         last_error: Exception | None = None
-        provider = "azure" if azure_api_key and azure_endpoint and azure_deployment else "gemini"
+        provider = "gemini"
         gemini_attempts = 0
-        azure_attempts = 0
         for attempt in range(1, 7):
             try:
-                if provider == "azure":
-                    azure_attempts += 1
-                    audit_prompt = prompt + "\\n\\nReturn the strict JSON audit checks only."
-                    payload = _azure_foundry_chat_json(azure_api_key, azure_endpoint, azure_deployment, audit_prompt)
-                elif provider == "gemini":
-                    gemini_attempts += 1
-                    payload = _gemini_json(
-                        ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA
-                    )
+                gemini_attempts += 1
+                payload = _gemini_json(ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA)
                 checks = payload.get("checks") if isinstance(payload, dict) else None
                 if not isinstance(checks, list):
                     raise ValueError("audit response must contain a checks array")
@@ -1959,11 +1903,7 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
                 last_error = exc
                 prefix = "   " * depth
                 log(f"{prefix}⚠️ Sentence-lock audit attempt {attempt}/6 failed ({provider}): {exc}")
-                if provider == "azure" and azure_attempts >= 3:
-                    provider = "gemini"
-                    log(f"{prefix}🛟 Azure AI Foundry audit retries failed; switching this audit batch to Gemini.")
-                    prompt = base_prompt
-                elif provider == "gemini" and gemini_attempts >= 3:
+                if gemini_attempts >= 3:
                     break
                 else:
                     prompt = (
@@ -2283,10 +2223,6 @@ class RecapPlanBuilder:
                 if key:
                     key_pool.append(("GEMINI_API_KEY", key))
         if not env_file or not env_file.is_file():
-        azure_api_key = str((env_values.get("AZURE_AI_FOUNDRY_API_KEY") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_API_KEY") or "").strip()
-        azure_endpoint = str((env_values.get("AZURE_AI_FOUNDRY_ENDPOINT") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_ENDPOINT") or "").strip()
-        azure_story_deployment = str((env_values.get("AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT") or "").strip()
-        azure_translation_deployment = str((env_values.get("AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT") or "").strip()
         if not key_pool:
             inherited_key = str(os.getenv("GEMINI_API_KEY") or "").strip()
             if inherited_key:
@@ -2391,7 +2327,7 @@ class RecapPlanBuilder:
 
         with _pushd(self.runtime_root):
             ai = ai_mod.AIService()
-            self.log(f"🤖 Gemini fallback text model: {ai.text_model}")
+            self.log(f"🤖 Gemini text model: {ai.text_model}")
             _configure_gemini_key_pool(
                 ai,
                 key_pool,
@@ -2401,8 +2337,8 @@ class RecapPlanBuilder:
             )
 
             self.progress(1, 4, "Story context memory")
-            self.log(f"🧠 [2/4] Story Context — Azure AI Foundry primary ({azure_story_deployment or 'not configured'}), Gemini fallback ({self.gemini_text_model})...")
-            context_source_fp = fp + "|seg:" + segmentation_profile + "|azure:" + azure_endpoint + ":" + azure_story_deployment + "|gemini:" + str(self.gemini_text_model)
+            self.log(f"🧠 [2/4] Story Context — Gemini only ({self.gemini_text_model})...")
+            context_source_fp = fp + "|seg:" + segmentation_profile + "|gemini:" + str(self.gemini_text_model)
             story_context = build_story_context(
                 ai, units,
                 batch_max_items=self.story_context_batch_max_items,
@@ -2411,7 +2347,6 @@ class RecapPlanBuilder:
                 checkpoint_path=context_checkpoint_file,
                 source_fingerprint=context_source_fp,
                 reuse=reuse,
-                azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_story_deployment,
                 source_language=language_name,
             )
             _atomic_json(context_file, {
@@ -2422,7 +2357,7 @@ class RecapPlanBuilder:
 
             self.log("📚 Translation provider receives the complete Story Context memory and canonical Burmese name glossary in every batch.")
             self.progress(2, 4, "Timestamp translation")
-            self.log(f"🌐 [3/4] Azure AI Foundry {language_name} → Myanmar translation primary; Gemini fallback — narrator source | no summary / no shortening...")
+            self.log(f"🌐 [3/4] Gemini {language_name} → Myanmar translation — narrator source | no summary / no shortening...")
             batches = _batch_by_size(units, max_items=self.translation_batch_max_items, max_chars=16000)
             translated_all: list[dict[str, Any]] = []
             if reuse and translations_file.is_file():
@@ -2519,7 +2454,6 @@ class RecapPlanBuilder:
                         next_context=nxt,
                         log=self.log,
                         source_language=language_name,
-                        azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                 except GeminiKeyPoolExhaustedError as exc:
                     saved = len(translated_all)
@@ -2537,7 +2471,6 @@ class RecapPlanBuilder:
                         previous_context=prev,
                         next_context=nxt,
                         log=self.log,
-                        azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                 # The audit may rewrite a line. Re-run any such row through the strict
                 # translator before it reaches the checkpoint or Myanmar TTS.
@@ -2549,7 +2482,6 @@ class RecapPlanBuilder:
                         ai, story_context=story_context, previous_context=prev,
                         current=english_rows, next_context=nxt, log=self.log,
                         source_language=language_name,
-                        azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                     repaired_by_id = {int(row["id"]): row for row in repaired_rows}
                     translated = [repaired_by_id.get(int(row["id"]), row) for row in translated]

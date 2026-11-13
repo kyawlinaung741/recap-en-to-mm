@@ -30,7 +30,6 @@ if errorlevel 1 goto :ffmpeg_fail
 
 echo.
 echo [5/5] Installing Ollama and downloading Qwen3:4b...
-call :setup_ollama
 set "OLLAMA_EXE="
 where ollama.exe >nul 2>nul
 if not errorlevel 1 (

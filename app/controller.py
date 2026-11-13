@@ -277,7 +277,7 @@ class App(tk.Tk):
         header = tk.Frame(outer, bg=BG)
         header.grid(row=0, column=0, sticky="ew", pady=(0, 6))
         tk.Label(header, text="Recap Production", bg=BG, fg=FG, font=("Segoe UI Semibold", 15)).pack(side="left")
-        tk.Label(header, text="Any language → Myanmar  |  Narrator only  |  Whisper + Gemini  |  Edge TTS  |  Smart Sync",
+        tk.Label(header, text="Any language → Myanmar  |  Narrator only  |  Whisper + Ollama / Gemini QC  |  Edge TTS  |  Smart Sync",
                  bg=BG, fg=MUTED, font=("Segoe UI", 9)).pack(side="left", padx=(14, 0), pady=(5, 0))
 
         source_bar = ttk.Frame(outer)

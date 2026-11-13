@@ -2577,6 +2577,7 @@ class RecapPlanBuilder:
         plan["segmentation_profile"] = segmentation_profile
         plan["boundary_profile"] = BOUNDARY_PROFILE
         plan["translation_direction"] = direction
+        plan["translation_engine"] = self.translation_engine
         plan["source_language"] = whisper_language
         plan["target_language"] = "mm"
         plan["translation_batch_count"] = len(batches)
@@ -2597,7 +2598,8 @@ class RecapPlanBuilder:
             "sync_max_seconds": self.atomic_max_duration,
             "context_read_only_for_each_id": True,
             "adjacent_duplicate_rejected": True,
-            "mandatory_per_id_alignment_audit": bool(self.translation_audit),
+            "mandatory_per_id_alignment_audit": bool(self.translation_audit and self.translation_engine == "gemini"),
+            "local_translation_validation": self.translation_engine == "nllb",
             "timestamp_authority": "local-whisper",
             "boundary_profile": BOUNDARY_PROFILE,
         }

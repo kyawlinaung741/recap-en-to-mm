@@ -54,11 +54,13 @@ Myanmar story narration · Whisper + GLM Story Context + Gemini-led translation 
 4. **`.env.example`** ကို **`.env`** လို့ copy ကူးပါ။ ပြီးရင် ဖွင့်ပြီး key ထည့်ပါ:
    ```ini
    GEMINI_API_KEY=ကိုယ့်_Gemini_key
-   GLM_API_KEY=ကိုယ့်_GLM_API_key
-   GLM_STORY_CONTEXT_MODEL=glm-4.7-flash
-   GLM_TRANSLATION_FALLBACK_MODEL=glm-4.7-flash
+   AZURE_AI_FOUNDRY_API_KEY=ကိုယ့်_Azure_resource_key
+   AZURE_AI_FOUNDRY_ENDPOINT=https://your-resource.services.ai.azure.com
+   AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT=your-story-deployment
+   AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT=your-translation-deployment
+   GLM_API_KEY=optional_GLM_key
    ```
-   GLM API key ကို [Zhipu BigModel Console](https://open.bigmodel.cn/) မှာ ဖန်တီးပြီး App ရဲ့ **API Keys / Models** ထဲက GLM အကွက်မှာ ထည့်ပါ။ Gemini key တွေကို Gemini အပိုင်းမှာပဲ ထည့်ပါ။ GLM Story Context က အဓိကဖြစ်ပြီး မအောင်မြင်တဲ့ chunk ကို Gemini က ဆက်လုပ်ပါတယ်။ Timestamp Translation မှာတော့ Gemini က အဓိကဖြစ်ပြီး Gemini model/key fallback chain မအောင်မြင်မှ GLM ကို အစားထိုးခေါ်သုံးပါတယ်။
+   Microsoft Foundry မှာ chat-completion model တစ်ခု deploy လုပ်ပြီး Resource/API key, endpoint နဲ့ deployment name ကိုယူပါ။ App ရဲ့ **API Keys / Models** ထဲမှာ Azure အကွက်တွေကို ဖြည့်ပါ။ Endpoint က Resource endpoint ဖြစ်ရပြီး app က OpenAI-compatible `/openai/v1/chat/completions` route ကို အသုံးပြုပါတယ်။ Story Context နဲ့ Translation နှစ်ခုလုံးမှာ Azure AI Foundry ကို အရင်စမ်းပြီး မအောင်မြင်ရင် Gemini ကို fallback သုံးပါတယ်။ Translation fallback chain နောက်ဆုံးမှာ GLM ကိုလည်း ဆက်ထားပါတယ်။ Azure model deployment နဲ့ usage အတွက် သက်ဆိုင်ရာ Azure billing/quota သတ်မှတ်ချက်တွေ ရှိနိုင်ပါတယ်။
 
 > ⚠️ `.env` ထဲမှာ ကိုယ့် key ရှိလို့ ဘယ်သူ့ကိုမှ မပို့ပါနဲ့၊ GitHub ပေါ်လည်း မတင်ပါနဲ့ (`.gitignore` ထဲမှာ ထည့်ထားပြီးသားပါ)။
 

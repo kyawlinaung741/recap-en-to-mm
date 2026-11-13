@@ -2398,7 +2398,7 @@ class RecapPlanBuilder:
             )
         os.environ["GEMINI_API_KEY"] = key_pool[0][1]
         os.environ["GEMINI_TEXT_MODEL"] = self.gemini_text_model
-        self.log(f"🔑 Gemini key pool ready — {len(key_pool)} key(s) | translation only ({language_name} source uses local Whisper {whisper_model})")
+        self.log(f"🔑 Gemini key pool ready — {len(key_pool)} key(s) | fallback only ({language_name} source uses local Whisper {whisper_model})")
 
         transcript = None
         if reuse and transcript_file.is_file() and state_file.is_file():
@@ -2491,7 +2491,7 @@ class RecapPlanBuilder:
 
         with _pushd(self.runtime_root):
             ai = ai_mod.AIService()
-            self.log(f"🤖 Gemini primary text model: {ai.text_model}")
+            self.log(f"🤖 Gemini fallback text model: {ai.text_model}")
             _configure_gemini_key_pool(
                 ai,
                 key_pool,

@@ -9,6 +9,7 @@ import os
 import re
 import difflib
 import shutil
+import requests
 import subprocess
 import sys
 import time
@@ -1290,6 +1291,47 @@ SOURCE CHUNK {i}/{len(batches)}:
     return memory
 
 
+class OllamaTranslationClient:
+    """Local Ollama JSON translator. Gemini remains responsible for story context and translation audit."""
+
+    def __init__(self, base_url: str = "http://127.0.0.1:11434", model: str = "qwen3:4b",
+                 timeout_seconds: int = 240):
+        self.base_url = str(base_url or "http://127.0.0.1:11434").rstrip("/")
+        self.model = str(model or "qwen3:4b").strip()
+        self.timeout_seconds = max(30, min(int(timeout_seconds), 900))
+        self.session = requests.Session()
+
+    def generate_json(self, prompt: str, response_schema: dict[str, Any] | None = None) -> Any:
+        try:
+            response = self.session.post(
+                self.base_url + "/api/chat",
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": False,
+                    "format": response_schema or "json",
+                    "think": False,
+                    "options": {"temperature": 0.2, "num_ctx": 8192},
+                },
+                timeout=self.timeout_seconds,
+            )
+            response.raise_for_status()
+            payload = response.json()
+            message = payload.get("message") or {}
+            raw = str(message.get("content") or "").strip()
+            if not raw:
+                raise RuntimeError("Ollama returned an empty message")
+            # Some Qwen builds may include reasoning tags despite think=false.
+            raw = re.sub(r"<think>.*?</think>", "", raw, flags=re.IGNORECASE | re.DOTALL).strip()
+            return _extract_json_payload(raw)
+        except requests.RequestException as exc:
+            raise RuntimeError(
+                f"Ollama request failed at {self.base_url} using {self.model}: {exc}. "
+                "Check that Ollama is running and qwen3:4b is installed."
+            ) from exc
+
+
+
 def _validate_translation_items(
     source_batch: list[dict[str, Any]],
     payload: Any,
@@ -1352,6 +1394,7 @@ def translate_batch(
     log: LogFn,
     _split_depth: int = 0,
     source_language: str = "English",
+    translator: OllamaTranslationClient | None = None,
 ) -> list[dict[str, Any]]:
     task_rules = """
 You are a CONTEXT-AWARE BURMESE NARRATION TRANSLATOR.
@@ -1407,9 +1450,8 @@ CRITICAL OUTPUT ID PROTOCOL:
     last: Exception | None = None
     for attempt in range(1, 4):
         try:
-            payload = _gemini_json(
-                ai, prompt, retries=1, log=log, response_schema=_TRANSLATION_RESPONSE_SCHEMA
-            )
+            payload = (translator.generate_json(prompt, _TRANSLATION_RESPONSE_SCHEMA) if translator else
+                       _gemini_json(ai, prompt, retries=1, log=log, response_schema=_TRANSLATION_RESPONSE_SCHEMA))
             translated = _validate_translation_items(current, payload, log=log)
             _assert_no_adjacent_translation_duplicates(translated, previous_context)
             stray = [f"ID {int(x['id']):05d}: {' '.join(_foreign_letters(x['translation']))}"
@@ -1487,6 +1529,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
+            translator=translator,
         )
         right_prev = (list(previous_context or []) + translated_left)[-context_limit:]
         translated_right = translate_batch(
@@ -1498,6 +1541,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
+            translator=translator,
         )
         combined = translated_left + translated_right
         _assert_no_adjacent_translation_duplicates(combined, list(previous_context or []))
@@ -1747,6 +1791,9 @@ class RecapPlanBuilder:
         atomic_target_duration: float = 4.2,
         gemini_request_timeout_seconds: int = 120,
         gemini_text_model: str = "gemini-3.5-flash",
+        ollama_url: str = "http://127.0.0.1:11434",
+        ollama_model: str = "qwen3:4b",
+        ollama_timeout_seconds: int = 240,
         source_language: str = "auto",
         whisper_model_other: str = WHISPER_MODEL_OTHER,
     ):
@@ -1771,6 +1818,9 @@ class RecapPlanBuilder:
         self.atomic_target_duration = max(2.5, min(float(atomic_target_duration), self.atomic_max_duration))
         self.gemini_request_timeout_seconds = max(30, min(int(gemini_request_timeout_seconds), 600))
         self.gemini_text_model = _clean(gemini_text_model) or "gemini-3.5-flash"
+        self.ollama_url = _clean(ollama_url) or "http://127.0.0.1:11434"
+        self.ollama_model = _clean(ollama_model) or "qwen3:4b"
+        self.ollama_timeout_seconds = max(30, min(int(ollama_timeout_seconds), 900))
 
     def _validate_runtime(self) -> None:
         required = [
@@ -2042,6 +2092,19 @@ class RecapPlanBuilder:
                 request_timeout_seconds=self.gemini_request_timeout_seconds,
             )
 
+            translator = OllamaTranslationClient(self.ollama_url, self.ollama_model, self.ollama_timeout_seconds)
+            try:
+                tags = translator.session.get(self.ollama_url.rstrip("/") + "/api/tags", timeout=5)
+                tags.raise_for_status()
+                installed = {str(m.get("name", "")).split(":")[0] for m in (tags.json().get("models") or [])}
+                if self.ollama_model.split(":")[0] not in installed:
+                    raise RuntimeError(f"Ollama model '{self.ollama_model}' is not installed. Run INSTALL_REQUIREMENTS.bat first.")
+            except requests.RequestException as exc:
+                raise RuntimeError(
+                    f"Ollama local service မရပါ ({self.ollama_url})။ Ollama ကိုဖွင့်ပြီး INSTALL_REQUIREMENTS.bat မှာ model install ပြီးကြောင်း စစ်ပါ။\n{exc}"
+                ) from exc
+            self.log(f"🦙 Ollama translation model: {self.ollama_model} ({self.ollama_url})")
+
             self.progress(1, 4, "Story context memory")
             self.log("🧠 [2/4] Gemini Story Context Memory pass...")
             context_source_fp = fp + "|seg:" + segmentation_profile
@@ -2061,7 +2124,7 @@ class RecapPlanBuilder:
             })
 
             self.progress(2, 4, "Timestamp translation")
-            self.log(f"🌐 [3/4] Gemini {language_name} → Myanmar translation — narrator source | V2 Smart Sync | no summary / no shortening...")
+            self.log(f"🌐 [3/4] Ollama {self.ollama_model}: {language_name} → Myanmar translation — Gemini Story Context + Audit | V2 Smart Sync...")
             batches = _batch_by_size(units, max_items=self.translation_batch_max_items, max_chars=16000)
             translated_all: list[dict[str, Any]] = []
             if reuse and translations_file.is_file():
@@ -2147,6 +2210,7 @@ class RecapPlanBuilder:
                         next_context=nxt,
                         log=self.log,
                         source_language=language_name,
+                        translator=translator,
                     )
                 except GeminiKeyPoolExhaustedError as exc:
                     saved = len(translated_all)

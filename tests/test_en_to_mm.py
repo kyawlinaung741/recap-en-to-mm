@@ -165,12 +165,21 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         self.assertAlmostEqual(slow["applied_factor"], 1.5)
 
 
-    def test_mimo_is_used_after_gemini_fallback_exhaustion(self):
+    def test_mimo_is_used_after_gemini_fallback_exhaustion_with_same_prompt(self):
         logs = []
-        with mock.patch.object(rp, "_gemini_json", side_effect=rp.GeminiKeyPoolExhaustedError("quota exhausted")):
-            with mock.patch.object(rp, "_mimo_chat_json", return_value={
-                "items": [{"id": 1, "translation": "သူ အိမ်ပြန်လာတယ်။"}]
-            }) as mimo:
+        gemini_prompts = []
+        mimo_prompts = []
+
+        def gemini_failure(_ai, prompt, **_kwargs):
+            gemini_prompts.append(prompt)
+            raise rp.GeminiKeyPoolExhaustedError("quota exhausted")
+
+        def mimo_answer(_key, prompt, **_kwargs):
+            mimo_prompts.append(prompt)
+            return {"items": [{"id": 1, "translation": "သူ အိမ်ပြန်လာတယ်။"}]}
+
+        with mock.patch.object(rp, "_gemini_json", side_effect=gemini_failure):
+            with mock.patch.object(rp, "_mimo_chat_json", side_effect=mimo_answer) as mimo:
                 out = rp.translate_batch(
                     None, story_context={}, previous_context=[],
                     current=[_unit(1, 0.0, 2.0, "He came home.")],
@@ -179,6 +188,7 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
                 )
         self.assertEqual(out[0]["translation"], "သူ အိမ်ပြန်လာတယ်။")
         mimo.assert_called_once()
+        self.assertEqual(mimo_prompts[0], gemini_prompts[0])
         self.assertTrue(any("trying MiMo fallback" in line for line in logs))
 
     def test_mimo_builds_story_context_and_keeps_chinese_pinyin(self):
@@ -212,6 +222,48 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         mimo.assert_called_once()
 
 
+
+    def test_gemini_builds_story_context_when_mimo_fails(self):
+        response = {
+            "characters": ["陈阳 is the main character"],
+            "relationships": [],
+            "places": ["红星饭店"],
+            "terms": [],
+            "plot_state": [],
+            "name_consistency": [],
+            "name_glossary": [
+                {"source_name": "陈阳", "pinyin": "Chén Yáng", "burmese_name": "ချန်ယမ်"}
+            ],
+            "unresolved": [],
+        }
+        mimo_prompts = []
+        gemini_prompts = []
+
+        def mimo_failure(_key, prompt, **_kwargs):
+            mimo_prompts.append(prompt)
+            raise RuntimeError("MiMo API unavailable")
+
+        def gemini_answer(_ai, prompt, **_kwargs):
+            gemini_prompts.append(prompt)
+            return response
+
+        with tempfile.TemporaryDirectory() as folder:
+            checkpoint = Path(folder) / "story_context_checkpoint.json"
+            with mock.patch.object(rp, "_mimo_chat_json", side_effect=mimo_failure):
+                with mock.patch.object(rp, "_gemini_json", side_effect=gemini_answer):
+                    context = rp.build_story_context(
+                        None, [_unit(1, 0.0, 2.0, "陈阳来到红星饭店。")],
+                        batch_max_items=10, log=lambda _m: None,
+                        should_stop=lambda: False, checkpoint_path=checkpoint,
+                        source_fingerprint="gemini-fallback-test", reuse=False,
+                        mimo_api_key="test-key", mimo_model="mimo-v2.6-pro",
+                        source_language="Chinese",
+                    )
+        self.assertEqual(context["name_glossary"][0]["burmese_name"], "ချန်ယမ်")
+        self.assertEqual(len(mimo_prompts), 3)
+        self.assertEqual(len(gemini_prompts), 1)
+        self.assertEqual(gemini_prompts[0], mimo_prompts[-1])
+        self.assertTrue(checkpoint.is_file())
 
     def test_mimo_fallback_also_covers_sentence_lock_audit(self):
         rows = [dict(_unit(1, 0.0, 2.0, "He came home."), translation="သူ အိမ်ပြန်လာတယ်။")]

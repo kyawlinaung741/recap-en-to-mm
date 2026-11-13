@@ -3,6 +3,8 @@ Sync plan stays V2. Since 2026-10-17 the SOURCE may be any language (test_source
 from __future__ import annotations
 
 import sys
+import tempfile
+import json
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -161,6 +163,54 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         self.assertAlmostEqual(fast["applied_factor"], 0.8)
         _vf, slow = core._sync_filter(2.0, 3.0, max_video_speed=1.25)
         self.assertAlmostEqual(slow["applied_factor"], 1.5)
+
+
+    def test_mimo_is_used_after_gemini_fallback_exhaustion(self):
+        logs = []
+        with mock.patch.object(rp, "_gemini_json", side_effect=rp.GeminiKeyPoolExhaustedError("quota exhausted")):
+            with mock.patch.object(rp, "_mimo_chat_json", return_value={
+                "items": [{"id": 1, "translation": "သူ အိမ်ပြန်လာတယ်။"}]
+            }) as mimo:
+                out = rp.translate_batch(
+                    None, story_context={}, previous_context=[],
+                    current=[_unit(1, 0.0, 2.0, "He came home.")],
+                    next_context=[], log=logs.append,
+                    mimo_api_key="test-key", mimo_model="mimo-v2.6-flash",
+                )
+        self.assertEqual(out[0]["translation"], "သူ အိမ်ပြန်လာတယ်။")
+        mimo.assert_called_once()
+        self.assertTrue(any("trying MiMo fallback" in line for line in logs))
+
+    def test_mimo_builds_story_context_and_keeps_chinese_pinyin(self):
+        response = {
+            "characters": ["陈阳 is the main character"],
+            "relationships": ["陈阳 is 林安羽's friend"],
+            "places": ["红星饭店"],
+            "terms": [],
+            "plot_state": ["陈阳 arrives at the restaurant"],
+            "name_consistency": [],
+            "name_glossary": [
+                {"source_name": "陈阳", "pinyin": "Chén Yáng", "burmese_name": "ချန်ယမ်"}
+            ],
+            "unresolved": [],
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            checkpoint = Path(folder) / "story_context_checkpoint.json"
+            with mock.patch.object(rp, "_mimo_chat_json", return_value=response) as mimo:
+                context = rp.build_story_context(
+                    None, [_unit(1, 0.0, 2.0, "陈阳来到红星饭店。")],
+                    batch_max_items=10, log=lambda _m: None,
+                    should_stop=lambda: False, checkpoint_path=checkpoint,
+                    source_fingerprint="test-fingerprint", reuse=False,
+                    mimo_api_key="test-key", mimo_model="mimo-v2.6-pro",
+                    source_language="Chinese",
+                )
+        self.assertEqual(context["name_glossary"][0]["pinyin"], "Chén Yáng")
+        self.assertEqual(context["name_glossary"][0]["burmese_name"], "ချန်ယမ်")
+        self.assertTrue(checkpoint.is_file())
+        self.assertEqual(json.loads(checkpoint.read_text(encoding="utf-8"))["version"], 3)
+        mimo.assert_called_once()
+
 
 
 if __name__ == "__main__":

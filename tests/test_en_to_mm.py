@@ -46,6 +46,44 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         self.assertIn("A အဆင့် → အေ အဆင့်", prompts[0])
         self.assertIn("stable phonetic name dictionary", prompts[0])
 
+    def test_name_glossary_keeps_first_canonical_spelling(self):
+        merged = rp._merge_name_glossary(
+            [{"source_name": "Christopher", "burmese_name": "ခရစ်စတိုဖာ"}],
+            [{"source_name": "Christopher", "burmese_name": "ခရစ္စတိုဖာ"},
+             {"source_name": "Alice", "burmese_name": "အဲလစ်"}],
+        )
+        self.assertEqual(
+            merged,
+            [{"source_name": "Christopher", "burmese_name": "ခရစ်စတိုဖာ"},
+             {"source_name": "Alice", "burmese_name": "အဲလစ်"}],
+        )
+
+    def test_wrong_character_name_is_reasked_until_canonical(self):
+        answers = [
+            {"items": [{"id": 1, "translation": "ခရစ္စတိုဖာ အိမ်ကို ဝင်လာတယ်။"}]},
+            {"items": [{"id": 1, "translation": "ခရစ်စတိုဖာ အိမ်ကို ဝင်လာတယ်။"}]},
+        ]
+        prompts = []
+
+        def answer(_ai, prompt, **_kw):
+            prompts.append(prompt)
+            return answers[len(prompts) - 1]
+
+        with mock.patch.object(rp, "_gemini_json", answer):
+            out = rp.translate_batch(
+                None,
+                story_context={"name_glossary": [
+                    {"source_name": "Christopher", "burmese_name": "ခရစ်စတိုဖာ"}
+                ]},
+                previous_context=[],
+                current=[_unit(1, 0.0, 2.0, "Christopher enters the house.")],
+                next_context=[],
+                log=lambda _m: None,
+            )
+        self.assertEqual(len(prompts), 2)
+        self.assertIn("MANDATORY CANONICAL NAME GLOSSARY", prompts[0])
+        self.assertEqual(out[0]["translation"], "ခရစ်စတိုဖာ အိမ်ကို ဝင်လာတယ်။")
+
     def test_english_words_are_reasked_and_never_returned(self):
         answers = [
             {"items": [{"id": 1, "translation": "ဧည့်ခန်းထဲမှာ မီးခိုးတွေရှိတယ်။ living room"}]},

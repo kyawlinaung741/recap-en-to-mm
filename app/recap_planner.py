@@ -1273,60 +1273,6 @@ def _gemini_json(
 
 
 
-def _glm_chat_json(
-    api_key: str,
-    prompt: str,
-    *,
-    model: str,
-    timeout_seconds: int = 180,
-) -> Any:
-    """Call Zhipu BigModel's OpenAI-compatible Chat Completions endpoint and parse JSON."""
-    key = str(api_key or "").strip()
-    if not key:
-        raise RuntimeError("GLM_API_KEY မတွေ့ပါ။ GLM API key ကို .env ထဲထည့်ပါ။")
-    payload = {
-        "model": str(model or "glm-4.7-flash"),
-        "messages": [
-            {"role": "system", "content": "You are a precise assistant. Follow the user's output format exactly."},
-            {"role": "user", "content": prompt},
-        ],
-        "max_tokens": 24000,
-        "temperature": 0.2,
-        "response_format": {"type": "json_object"},
-        "stream": False,
-    }
-    proxy = str(os.getenv("GLM_PROXY") or os.getenv("GEMINI_PROXY") or "").strip()
-    proxies = None
-    if proxy and proxy.lower() not in {"none", "off", "direct", "0"}:
-        proxies = {"http": proxy, "https": proxy}
-    response = requests.post(
-        "https://open.bigmodel.cn/api/paas/v4/chat/completions",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=max(30, min(int(timeout_seconds), 600)),
-        proxies=proxies,
-    )
-    if response.status_code >= 400:
-        detail = (response.text or "")[:1200]
-        raise RuntimeError(f"GLM API HTTP {response.status_code}: {detail}")
-    data = response.json()
-    choices = data.get("choices") or []
-    if not choices:
-        raise RuntimeError("GLM API returned no choices")
-    choice = choices[0] or {}
-    if choice.get("finish_reason") == "length":
-        raise RuntimeError("GLM response was truncated (finish_reason=length)")
-    message = choice.get("message") or {}
-    raw = str(message.get("content") or "").strip()
-    if not raw:
-        raise RuntimeError("GLM returned an empty response")
-    parsed = _extract_json_payload(raw)
-    if not isinstance(parsed, dict):
-        raise RuntimeError("GLM response must be a JSON object")
-    return parsed
-
-
-
 def _azure_foundry_chat_json(
     api_key: str, endpoint: str, deployment: str, prompt: str, *, timeout_seconds: int = 180
 ) -> Any:
@@ -1512,8 +1458,6 @@ def build_story_context(
     checkpoint_path: Path | None = None,
     source_fingerprint: str = "",
     reuse: bool = True,
-    glm_api_key: str = "",
-    glm_model: str = "glm-4.7-flash",
     azure_api_key: str = "",
     azure_endpoint: str = "",
     azure_deployment: str = "",
@@ -1539,7 +1483,7 @@ def build_story_context(
                 if 0 <= completed <= len(batches) and isinstance(saved_memory, dict):
                     memory = saved_memory
                     if completed:
-                        log(f"♻️ GLM Story Context resume — {completed}/{len(batches)} batches already done")
+                        log(f"♻️ Azure/Gemini Story Context resume — {completed}/{len(batches)} batches already done")
                 else:
                     completed = 0
         except Exception:
@@ -1554,7 +1498,7 @@ def build_story_context(
         if i <= completed:
             continue
         if should_stop():
-            raise InterruptedError("STOP requested during GLM story-context pass")
+            raise InterruptedError("STOP requested during Story Context pass")
         pinyin_rule = (
             "- For every Chinese personal/place/organization name, include standard Mandarin Pinyin with tone marks "
             "when confidently known; for ambiguous/polyphonic names use context and mark uncertain cases in unresolved. "
@@ -1825,7 +1769,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             return translated
         except GeminiKeyPoolExhaustedError as exc:
             last = exc
-            log(f"⚠️ Gemini fallback chain exhausted for this batch; trying GLM fallback: {exc}")
+            log(f"⚠️ Gemini fallback chain exhausted for this batch: {exc}")
             break
         except Exception as exc:
             last = exc
@@ -1837,25 +1781,6 @@ CRITICAL OUTPUT ID PROTOCOL:
                 f"The exact items[].id sequence MUST be {json.dumps(exact_ids, ensure_ascii=False)}. "
                 "Do not omit the final ID, renumber rows, or merge adjacent IDs."
             )
-
-    if glm_api_key:
-        # GLM receives the exact same translator prompt and validation contract as Gemini.
-        fallback_prompt = prompt
-        for fallback_attempt in range(1, 3):
-            try:
-                log(f"🛟 GLM translation fallback attempt {fallback_attempt}/2 for IDs "
-                    f"{int(current[0]['id']):05d}-{int(current[-1]['id']):05d}")
-                fallback_payload = _glm_chat_json(
-                    glm_api_key, fallback_prompt, model=glm_model
-                )
-                return _validate_translation_candidate(
-                    current, fallback_payload, story_context=story_context,
-                    previous_context=previous_context, next_context=next_context, log=log,
-                )
-            except Exception as fallback_exc:
-                last = fallback_exc
-                log(f"⚠️ GLM translation fallback {fallback_attempt}/2 failed: {fallback_exc}")
-                fallback_prompt += f"\\n\\nCORRECTION REQUIRED: {fallback_exc}. Return the entire batch again."
 
     # V26 translation-ID resilience: V23's short local-sync segmentation creates many
     # more IDs per long video.  Some Gemini responses occasionally omit the last row
@@ -1886,7 +1811,6 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
-            glm_api_key=glm_api_key, glm_model=glm_model,
             azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_deployment,
         )
         right_prev = (list(previous_context or []) + translated_left)[-context_limit:]
@@ -1988,7 +1912,6 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
         last_error: Exception | None = None
         provider = "azure" if azure_api_key and azure_endpoint and azure_deployment else "gemini"
         gemini_attempts = 0
-        glm_attempts = 0
         azure_attempts = 0
         for attempt in range(1, 7):
             try:
@@ -2001,11 +1924,6 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
                     payload = _gemini_json(
                         ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA
                     )
-                else:
-                    glm_attempts += 1
-                    audit_prompt = prompt + "\\n\\nGemini is unavailable. You are the fallback auditor. "
-                    audit_prompt += "Return the same strict JSON checks structure and preserve every original translation unless repair is necessary."
-                    payload = _glm_chat_json(glm_api_key, audit_prompt, model=glm_model)
                 checks = payload.get("checks") if isinstance(payload, dict) else None
                 if not isinstance(checks, list):
                     raise ValueError("audit response must contain a checks array")
@@ -2041,11 +1959,6 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
                 return audited
             except GeminiKeyPoolExhaustedError as exc:
                 last_error = exc
-                if provider == "gemini" and glm_api_key:
-                    provider = "glm"
-                    prefix = "   " * depth
-                    log(f"{prefix}🛟 Gemini audit fallback exhausted; switching this audit batch to GLM.")
-                    continue
                 raise
             except Exception as exc:
                 last_error = exc
@@ -2055,11 +1968,7 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
                     provider = "gemini"
                     log(f"{prefix}🛟 Azure AI Foundry audit retries failed; switching this audit batch to Gemini.")
                     prompt = base_prompt
-                elif provider == "gemini" and gemini_attempts >= 2 and glm_api_key:
-                    provider = "glm"
-                    log(f"{prefix}🛟 Gemini audit retries failed; switching this audit batch to GLM.")
-                    prompt = base_prompt
-                elif provider == "glm" and glm_attempts >= 2:
+                elif provider == "gemini" and gemini_attempts >= 4:
                     break
                 else:
                     prompt = (
@@ -2309,12 +2218,12 @@ class RecapPlanBuilder:
         state_file = job_dir / "planner_checkpoint.json"
         fp = _source_fingerprint_for_mode(
             source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}")
-        # Keep existing local Whisper transcripts when upgrading an older job to GLM Story Context.
+        # Keep existing local Whisper transcripts when upgrading the text-provider pipeline.
         legacy_transcript_fp = _source_fingerprint_for_mode(
             source, "timestamp_translation_en_to_mm_narrator_v4_glm_story_context|" + direction
             + f"|whisper:{whisper_model}:{whisper_language}")
         # Keep the Whisper transcript from the previous MiMo-based planner when only the
-        # text provider changes; Story Context and translations are rebuilt for GLM.
+        # text provider changes; Story Context and translations are rebuilt for Azure/Gemini.
         previous_provider_transcript_fp = _source_fingerprint_for_mode(
             source, "timestamp_translation_en_to_mm_narrator_v3_mimo_story_context|" + direction
             + f"|whisper:{whisper_model}:{whisper_language}")
@@ -2363,7 +2272,6 @@ class RecapPlanBuilder:
             load_dotenv(env_file, override=True)
             self.log(f"🔑 Gemini .env loaded: {env_file}")
             env_values = dotenv_values(env_file)
-            glm_api_key = str(env_values.get("GLM_API_KEY") or os.getenv("GLM_API_KEY") or "").strip()
             seen_keys: set[str] = set()
             # Every GEMINI_IMAGE_PROJECT_<N>_KEY in numeric order, else GEMINI_API_KEY.
             numbers = sorted(
@@ -2380,7 +2288,6 @@ class RecapPlanBuilder:
                 if key:
                     key_pool.append(("GEMINI_API_KEY", key))
         if not env_file or not env_file.is_file():
-            glm_api_key = str(os.getenv("GLM_API_KEY") or "").strip()
         azure_api_key = str((env_values.get("AZURE_AI_FOUNDRY_API_KEY") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_API_KEY") or "").strip()
         azure_endpoint = str((env_values.get("AZURE_AI_FOUNDRY_ENDPOINT") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_ENDPOINT") or "").strip()
         azure_story_deployment = str((env_values.get("AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT") or "").strip()
@@ -2389,8 +2296,6 @@ class RecapPlanBuilder:
             inherited_key = str(os.getenv("GEMINI_API_KEY") or "").strip()
             if inherited_key:
                 key_pool.append(("GEMINI_API_KEY", inherited_key))
-        glm_model = str((env_values.get("GLM_STORY_CONTEXT_MODEL") if env_file and env_file.is_file() else "") or os.getenv("GLM_STORY_CONTEXT_MODEL") or "glm-4.7-flash").strip()
-        glm_fallback_model = str((env_values.get("GLM_TRANSLATION_FALLBACK_MODEL") if env_file and env_file.is_file() else "") or os.getenv("GLM_TRANSLATION_FALLBACK_MODEL") or "glm-4.7-flash").strip()
         if not key_pool:
             raise RuntimeError(
                 "Gemini API key မတွေ့ပါ။ .env ထဲမှာ GEMINI_API_KEY=... "
@@ -2511,8 +2416,6 @@ class RecapPlanBuilder:
                 checkpoint_path=context_checkpoint_file,
                 source_fingerprint=context_source_fp,
                 reuse=reuse,
-                glm_api_key=glm_api_key,
-                glm_model=glm_model,
                 azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_story_deployment,
                 source_language=language_name,
             )
@@ -2621,7 +2524,6 @@ class RecapPlanBuilder:
                         next_context=nxt,
                         log=self.log,
                         source_language=language_name,
-                        glm_api_key=glm_api_key, glm_model=glm_fallback_model,
                         azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                 except GeminiKeyPoolExhaustedError as exc:
@@ -2640,8 +2542,6 @@ class RecapPlanBuilder:
                         previous_context=prev,
                         next_context=nxt,
                         log=self.log,
-                        glm_api_key=glm_api_key,
-                        glm_model=glm_fallback_model,
                         azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                 # The audit may rewrite a line. Re-run any such row through the strict

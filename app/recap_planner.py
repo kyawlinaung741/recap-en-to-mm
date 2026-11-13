@@ -1521,6 +1521,17 @@ CRITICAL OUTPUT ID PROTOCOL:
                 raise ValueError("; ".join(problems))
             if english:
                 raise ValueError("English/Latin words remain after 4 translation attempts; refusing to save a line that the Myanmar TTS voice may not pronounce: " + "; ".join(english[:10]))
+            if notes or repeats or twice or slid:
+                unresolved = []
+                if notes:
+                    unresolved.append("non-narration/empty Burmese lines: " + ", ".join(notes[:10]))
+                if repeats:
+                    unresolved.append("adjacent ID repetition: " + ", ".join(f"{a:05d}/{b:05d}" for a, b in repeats[:10]))
+                if twice:
+                    unresolved.append("near-duplicate translations: " + ", ".join(f"{a:05d}/{b:05d}" for a, b in twice[:10]))
+                if slid:
+                    unresolved.append("possible one-ID-early alignment drift: " + ", ".join(f"{a:05d}-{b:05d}" for a, b in slid[:10]))
+                raise ValueError("Translation quality checks still failed after 4 attempts; refusing to checkpoint: " + "; ".join(unresolved))
             return translated
         except GeminiKeyPoolExhaustedError:
             raise

@@ -1474,9 +1474,10 @@ def build_story_context(
     mimo_model: str = "mimo-v2.6-pro",
     source_language: str = "Chinese",
 ) -> dict[str, Any]:
-    """MiMo builds movie-wide context first; Gemini consumes this memory during translation."""
-    if not str(mimo_api_key or "").strip():
-        raise RuntimeError("MiMo Story Context အတွက် MIMO_API_KEY မတွေ့ပါ။ .env ထဲမှာ MIMO_API_KEY=... ထည့်ပါ။")
+    """MiMo builds movie-wide context first; Gemini is the fallback context builder."""
+    use_mimo = bool(str(mimo_api_key or "").strip())
+    if not use_mimo:
+        log("⚠️ MIMO_API_KEY မရှိပါ — Story Context ကို Gemini နဲ့ တည်ဆောက်မယ်။")
     batches = _batch_by_size(units, max_items=batch_max_items, max_chars=24000)
     memory: dict[str, Any] = {
         "characters": [], "relationships": [], "places": [], "terms": [],
@@ -1526,7 +1527,12 @@ CANONICAL NAME RULES:
 - Preserve each exact source-language name as it appears in the transcript.
 - For every recurring or plot-important named person, place or organization, add a name_glossary object:
   source_name (exact original spelling), pinyin, burmese_name (one consistent Burmese phonetic rendering).
-{pinyin_rule}- Burmese names must be Burmese script, sound-based, consistent, and not translated by meaning.
+{pinyin_rule}- For Chinese names, render the Mandarin pronunciation into the closest natural Burmese phonetic spelling possible.
+  Prioritize how the name is pronounced in Mandarin, not the visual shape or meaning of Chinese characters.
+  Use Pinyin with tone marks as an aid, then choose the closest Burmese syllables; preserve syllable order.
+  Do not leave Chinese characters, Latin Pinyin, or English letters as the Burmese name.
+  Do not translate a name's meaning. For uncertain/polyphonic readings, use story context and mark uncertainty in unresolved.
+- Burmese names must be Burmese script, sound-based, consistent, and not translated by meaning.
 - Keep aliases linked to the same character in characters/relationships and note aliases in name_consistency.
 - Never silently change an established Burmese spelling. If new evidence proves an identity was wrong,
   explain it in unresolved for later review.
@@ -1543,26 +1549,50 @@ SOURCE CHUNK {i}/{len(batches)}:
 """
         last_error = None
         data = None
-        for attempt in range(1, 4):
-            try:
-                data = _mimo_chat_json(mimo_api_key, prompt, model=mimo_model)
-                required = ("characters", "relationships", "places", "terms", "plot_state",
-                            "name_consistency", "name_glossary", "unresolved")
-                if any(not isinstance(data.get(k), list) for k in required):
-                    raise ValueError("MiMo Story Context JSON is missing required list fields")
-                break
-            except InterruptedError:
-                raise
-            except Exception as exc:
-                data = None
-                last_error = exc
-                log(f"⚠️ MiMo Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
-                if attempt < 3:
-                    time.sleep(attempt * 1.5)
+        required = ("characters", "relationships", "places", "terms", "plot_state",
+                    "name_consistency", "name_glossary", "unresolved")
+        if use_mimo:
+            for attempt in range(1, 4):
+                try:
+                    data = _mimo_chat_json(mimo_api_key, prompt, model=mimo_model)
+                    if any(not isinstance(data.get(k), list) for k in required):
+                        raise ValueError("MiMo Story Context JSON is missing required list fields")
+                    log(f"🧠 MiMo Story Context {i}/{len(batches)} completed")
+                    break
+                except InterruptedError:
+                    raise
+                except Exception as exc:
+                    data = None
+                    last_error = exc
+                    log(f"⚠️ MiMo Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
+                    if attempt < 3:
+                        time.sleep(attempt * 1.5)
+        if data is None:
+            log(f"🛟 MiMo Story Context unavailable for chunk {i}; Gemini is taking over this context chunk.")
+            for attempt in range(1, 4):
+                if should_stop():
+                    raise InterruptedError("STOP requested during Gemini Story Context fallback")
+                try:
+                    data = _gemini_json(
+                        ai, prompt, retries=1, log=log,
+                        response_schema=_STORY_CONTEXT_RESPONSE_SCHEMA,
+                    )
+                    if any(not isinstance(data.get(k), list) for k in required):
+                        raise ValueError("Gemini Story Context JSON is missing required list fields")
+                    log(f"🧠 Gemini Story Context fallback {i}/{len(batches)} completed")
+                    break
+                except InterruptedError:
+                    raise
+                except Exception as exc:
+                    data = None
+                    last_error = exc
+                    log(f"⚠️ Gemini Story Context fallback {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
+                    if attempt < 3:
+                        time.sleep(attempt * 1.5)
         if data is None:
             raise RuntimeError(
-                f"MiMo Story Context {i}/{len(batches)} မအောင်မြင်ပါ။ ဘာသာပြန်မှုကို မစတင်ပါ။ "
-                f"အကြောင်းရင်း: {last_error}"
+                f"MiMo နှင့် Gemini Story Context နှစ်ခုလုံး chunk {i}/{len(batches)} မအောင်မြင်ပါ။ "
+                f"ဘာသာပြန်မှုကို မစတင်ပါ။ နောက်ဆုံးအမှား: {last_error}"
             ) from last_error
 
         memory = {
@@ -1738,11 +1768,8 @@ CRITICAL OUTPUT ID PROTOCOL:
             )
 
     if mimo_api_key:
-        fallback_prompt = prompt + """
-GEMINI HAS FAILED. You are now the backup translator for this batch.
-Follow every original translation rule above. Use the supplied MiMo-generated Story Context
-and canonical Burmese name glossary as authoritative. Return JSON only with the exact IDs.
-"""
+        # MiMo receives the exact same translator prompt and validation contract as Gemini.
+        fallback_prompt = prompt
         for fallback_attempt in range(1, 3):
             try:
                 log(f"🛟 MiMo translation fallback attempt {fallback_attempt}/2 for IDs "
@@ -2379,8 +2406,8 @@ class RecapPlanBuilder:
             )
 
             self.progress(1, 4, "Story context memory")
-            self.log(f"🧠 [2/4] MiMo Story Context pass — model={mimo_model}...")
-            context_source_fp = fp + "|seg:" + segmentation_profile + "|mimo:" + mimo_model
+            self.log(f"🧠 [2/4] Story Context — MiMo primary ({mimo_model}), Gemini fallback ({self.gemini_text_model})...")
+            context_source_fp = fp + "|seg:" + segmentation_profile + "|mimo:" + mimo_model + "|gemini:" + str(self.gemini_text_model)
             story_context = build_story_context(
                 ai, units,
                 batch_max_items=self.story_context_batch_max_items,
@@ -2399,7 +2426,7 @@ class RecapPlanBuilder:
                 "context": story_context,
             })
 
-            self.log("📚 Gemini receives the complete MiMo Story Context and canonical name glossary in every translation batch.")
+            self.log("📚 Gemini receives the complete Story Context memory (MiMo-built or Gemini-fallback) and canonical Burmese name glossary in every translation batch.")
             self.progress(2, 4, "Timestamp translation")
             self.log(f"🌐 [3/4] Gemini {language_name} → Myanmar translation — narrator source | V2 Smart Sync | no summary / no shortening...")
             batches = _batch_by_size(units, max_items=self.translation_batch_max_items, max_chars=16000)

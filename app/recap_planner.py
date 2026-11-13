@@ -1342,6 +1342,16 @@ class OllamaTranslationClient:
                 "Check that Ollama is running and qwen3:4b is installed."
             ) from exc
 
+    def unload(self) -> None:
+        """Release Qwen VRAM before the later video-render stage."""
+        try:
+            self.session.post(
+                self.base_url + "/api/generate",
+                json={"model": self.model, "prompt": "", "stream": False, "keep_alive": 0},
+                timeout=10,
+            ).raise_for_status()
+        except requests.RequestException:
+            pass
 
 
 def _validate_translation_items(
@@ -2268,6 +2278,10 @@ class RecapPlanBuilder:
                     "total": len(units),
                     "items": translated_all,
                 })
+
+        # Qwen may occupy several GB of VRAM; release it before Smart Sync / NVENC rendering.
+        translator.unload()
+        self.log("🦙 Ollama model unloaded — GPU memory released for Smart Sync rendering.")
 
         if [int(x["id"]) for x in translated_all] != [int(x["id"]) for x in units]:
             raise RuntimeError("Final translation ID sequence mismatch")

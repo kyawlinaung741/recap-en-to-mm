@@ -53,9 +53,12 @@ Myanmar story narration · Whisper + MiMo Story Context + Gemini-led translation
    - **FFmpeg** — စက်ထဲမှာ မရှိရင် (~100 MB) download လုပ်ပြီး ဒီ folder ထဲက `ffmpeg\` ထဲ ထည့်ပေးပါမယ်။ PATH ထဲ (သို့) `C:\ffmpeg\bin\` မှာ ရှိပြီးသားဆိုရင် အဲ့ဒါကိုပဲ သုံးပါတယ်။
 4. **`.env.example`** ကို **`.env`** လို့ copy ကူးပါ။ ပြီးရင် ဖွင့်ပြီး key ထည့်ပါ:
    ```ini
-   GEMINI_API_KEY=ကိုယ့်_key
+   GEMINI_API_KEY=ကိုယ့်_Gemini_key
+   MIMO_API_KEY=ကိုယ့်_MiMo_API_key
+   MIMO_STORY_CONTEXT_MODEL=mimo-v2.6-pro
+   MIMO_TRANSLATION_FALLBACK_MODEL=mimo-v2.6-flash
    ```
-   Key တစ်ခုထက် ပိုထည့်ချင်ရင် App ကိုဖွင့်ပြီး အပေါ်ဘက် **API Keys** ခလုတ်ကို နှိပ်ပါ။ အဲဒီနေရာမှာ Key 1၊ Key 2၊ Key 3 ဆိုပြီး အကွက် ၃ ခုရှိပါတယ်။ Google AI Studio က ရထားတဲ့ Key တွေကို အကွက်တစ်ခုစီမှာ ကူးထည့်ပြီး **Save Keys** နှိပ်ပါ။ `.env` ဖိုင်ထဲကို အလိုအလျောက် သိမ်းပေးပြီး နောက်တစ်ကြိမ် **START / RESUME** နှိပ်တဲ့အခါ သုံးပါတယ်။ Key တစ်ခုရဲ့ quota ပြည့်သွားရင် နောက် Key ကို အလိုအလျောက် ပြောင်းသုံးပါတယ်။ လက်ရှိ run နေတဲ့အလုပ်အတွင်း Key ပြောင်းထားရင် နောက်တစ်ကြိမ် START / RESUME မှာ စတင်သက်ရောက်ပါမယ်။
+   MiMo key ကို Xiaomi MiMo API Console မှာ ဖန်တီးထားတဲ့ API key အဖြစ် ထည့်ပါ။ MiMo chat app ကို login ဝင်ထားတာနဲ့ API ချိတ်ဆက်ခွင့် မတူပါဘူး။ Story Context အတွက် API key လိုပါတယ်။ Key တစ်ခုထက် ပိုထည့်ချင်ရင် App ကိုဖွင့်ပြီး အပေါ်ဘက် **API Keys** ခလုတ်ကို နှိပ်ပါ။ အဲဒီနေရာမှာ Key 1၊ Key 2၊ Key 3 ဆိုပြီး အကွက် ၃ ခုရှိပါတယ်။ Google AI Studio က ရထားတဲ့ Key တွေကို အကွက်တစ်ခုစီမှာ ကူးထည့်ပြီး **Save Keys** နှိပ်ပါ။ `.env` ဖိုင်ထဲကို အလိုအလျောက် သိမ်းပေးပြီး နောက်တစ်ကြိမ် **START / RESUME** နှိပ်တဲ့အခါ သုံးပါတယ်။ Key တစ်ခုရဲ့ quota ပြည့်သွားရင် နောက် Key ကို အလိုအလျောက် ပြောင်းသုံးပါတယ်။ လက်ရှိ run နေတဲ့အလုပ်အတွင်း Key ပြောင်းထားရင် နောက်တစ်ကြိမ် START / RESUME မှာ စတင်သက်ရောက်ပါမယ်။
 
 > ⚠️ `.env` ထဲမှာ ကိုယ့် key ရှိလို့ ဘယ်သူ့ကိုမှ မပို့ပါနဲ့၊ GitHub ပေါ်လည်း မတင်ပါနဲ့ (`.gitignore` ထဲမှာ ထည့်ထားပြီးသားပါ)။
 
@@ -268,9 +271,8 @@ videos into parts.
    letters). Where Whisper writes few sentence marks, the end of a Whisper segment counts as a sentence end.
 2. **Split** — sentence/clause/pause boundaries give short sync units (about 4.2 s, at most 5.6 s);
    more units = more sync anchors.
-3. **Story memory** — Gemini builds one movie-wide canonical source-name → Burmese-pronunciation glossary,
-   then every translation batch must use those exact spellings.
-4. **Translate** — Gemini translates up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing)
+3. **Story memory** — MiMo reads the complete movie transcript in chunks and builds the movie-wide context and canonical source-name → Pinyin → Burmese-pronunciation glossary.
+4. **Translate** — Gemini reads that MiMo memory and leads translation of up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing). MiMo is used as a translation fallback only when Gemini's configured model/key chain cannot complete a batch.
    (no summary, no shortening, every unit keeps its own content), then an audit pass repairs
    omissions/shifts/duplicates. A known name mentioned in a source line must appear with its exact
    glossary spelling in Burmese; inconsistent names are retried and never silently accepted. Letters of

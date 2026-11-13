@@ -151,12 +151,14 @@ class NLLBLocalTranslator:
             for (source_row, _protected, restore), text in zip(window, decoded):
                 translated = str(text or "").strip()
                 for token, burmese_name in restore.items():
-                    if token not in translated:
+                    # SentencePiece may insert spaces inside an unfamiliar Latin token.
+                    token_pattern = re.compile(r"\\s*".join(re.escape(char) for char in token), re.IGNORECASE)
+                    if not token_pattern.search(translated):
                         raise RuntimeError(
                             f"NLLB က protected name token ကို မထိန်းနိုင်ပါ။ "
                             f"ID {int(source_row['id']):05d}; name restoration refused."
                         )
-                    translated = translated.replace(token, burmese_name)
+                    translated = token_pattern.sub(lambda _match: burmese_name, translated, count=1)
                 if not translated:
                     raise RuntimeError(f"NLLB returned an empty translation for ID {int(source_row['id']):05d}.")
                 outputs.append({

@@ -1290,8 +1290,9 @@ def _mimo_chat_json(
             {"role": "system", "content": "You are a precise assistant. Follow the user's output format exactly."},
             {"role": "user", "content": prompt},
         ],
-        "max_completion_tokens": 12000,
+        "max_completion_tokens": 24000,
         "temperature": 0.2,
+        "response_format": {"type": "json_object"},
         "stream": False,
     }
     proxy = str(os.getenv("MIMO_PROXY") or os.getenv("GEMINI_PROXY") or "").strip()

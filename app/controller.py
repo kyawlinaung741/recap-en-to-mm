@@ -1451,7 +1451,7 @@ class App(tk.Tk):
             "gemini_text_model": str(self.cfg.get("gemini_text_model", "gemini-3.5-flash")),
             "ollama_url": str(self.cfg.get("ollama_url", "http://127.0.0.1:11434")),
             "ollama_model": str(self.cfg.get("ollama_model", "qwen3:4b")),
-            "ollama_timeout_seconds": int(self.cfg.get("ollama_timeout_seconds", 240)),
+            "ollama_timeout_seconds": int(self.cfg.get("ollama_timeout_seconds", 600)),
             "whisper_model_other": str(self.cfg.get("whisper_model_other", "medium")),
         }
 

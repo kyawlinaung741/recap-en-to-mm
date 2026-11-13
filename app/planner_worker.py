@@ -52,7 +52,7 @@ def main() -> int:
             gemini_text_model=str(cfg.get("gemini_text_model", "gemini-3.5-flash")),
             ollama_url=str(cfg.get("ollama_url", "http://127.0.0.1:11434")),
             ollama_model=str(cfg.get("ollama_model", "qwen3:4b")),
-            ollama_timeout_seconds=int(cfg.get("ollama_timeout_seconds", 240)),
+            ollama_timeout_seconds=int(cfg.get("ollama_timeout_seconds", 600)),
             source_language=str(cfg.get("source_language", "auto")),
             whisper_model_other=str(cfg.get("whisper_model_other", "medium")),
         )

@@ -40,6 +40,7 @@ echo ================================================================
 echo Python requirements, Chromium, FFmpeg, Ollama, and qwen3:4b
 echo are ready.
 echo.
+echo Ollama translates locally. Gemini is still used for Story Context and Translation Audit.
 echo Put your Gemini key in .env (copy .env.example), then run RUN.bat.
 echo Ollama model: qwen3:4b
 echo.

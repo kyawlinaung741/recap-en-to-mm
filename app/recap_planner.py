@@ -1293,6 +1293,7 @@ def _mimo_chat_json(
         "max_completion_tokens": 24000,
         "temperature": 0.2,
         "response_format": {"type": "json_object"},
+        "thinking": {"type": "disabled"},
         "stream": False,
     }
     proxy = str(os.getenv("MIMO_PROXY") or os.getenv("GEMINI_PROXY") or "").strip()
@@ -1549,6 +1550,7 @@ SOURCE CHUNK {i}/{len(batches)}:
 """
         last_error = None
         data = None
+        context_provider = "MiMo"
         required = ("characters", "relationships", "places", "terms", "plot_state",
                     "name_consistency", "name_glossary", "unresolved")
         if use_mimo:
@@ -1568,6 +1570,7 @@ SOURCE CHUNK {i}/{len(batches)}:
                     if attempt < 3:
                         time.sleep(attempt * 1.5)
         if data is None:
+            context_provider = "Gemini fallback"
             log(f"🛟 MiMo Story Context unavailable for chunk {i}; Gemini is taking over this context chunk.")
             for attempt in range(1, 4):
                 if should_stop():
@@ -1615,7 +1618,7 @@ SOURCE CHUNK {i}/{len(batches)}:
                 "source_fingerprint": source_fingerprint,
                 "completed_batches": i, "total_batches": len(batches), "context": memory,
             })
-        log(f"🧠 MiMo Story Context {i}/{len(batches)} updated")
+        log(f"🧠 {context_provider} Story Context {i}/{len(batches)} updated")
     return memory
 
 

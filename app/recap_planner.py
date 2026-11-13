@@ -1900,6 +1900,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             _split_depth=_split_depth + 1,
             source_language=source_language,
             glm_api_key=glm_api_key, glm_model=glm_model,
+            azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_deployment,
         )
         combined = translated_left + translated_right
         _assert_no_adjacent_translation_duplicates(combined, list(previous_context or []))
@@ -1919,6 +1920,9 @@ def audit_and_repair_batch(
     log: LogFn,
     glm_api_key: str = "",
     glm_model: str = "glm-4.7-flash",
+    azure_api_key: str = "",
+    azure_endpoint: str = "",
+    azure_deployment: str = "",
 ) -> list[dict[str, Any]]:
     """Mandatory per-ID ownership/completeness audit; only failed rows may be rewritten.
 
@@ -1982,12 +1986,17 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
 """
         prompt = base_prompt
         last_error: Exception | None = None
-        provider = "gemini"
+        provider = "azure" if azure_api_key and azure_endpoint and azure_deployment else "gemini"
         gemini_attempts = 0
         glm_attempts = 0
-        for attempt in range(1, 5):
+        azure_attempts = 0
+        for attempt in range(1, 7):
             try:
-                if provider == "gemini":
+                if provider == "azure":
+                    azure_attempts += 1
+                    audit_prompt = prompt + "\\n\\nReturn the strict JSON audit checks only."
+                    payload = _azure_foundry_chat_json(azure_api_key, azure_endpoint, azure_deployment, audit_prompt)
+                elif provider == "gemini":
                     gemini_attempts += 1
                     payload = _gemini_json(
                         ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA
@@ -2488,7 +2497,7 @@ class RecapPlanBuilder:
             )
 
             self.progress(1, 4, "Story context memory")
-            self.log(f"🧠 [2/4] Story Context — Azure AI Foundry primary ({azure_story_deployment or "not configured"}), Gemini fallback ({self.gemini_text_model})...")
+            self.log(f"🧠 [2/4] Story Context — Azure AI Foundry primary ({azure_story_deployment or 'not configured'}), Gemini fallback ({self.gemini_text_model})...")
             context_source_fp = fp + "|seg:" + segmentation_profile + "|glm:" + glm_model + "|gemini:" + str(self.gemini_text_model)
             story_context = build_story_context(
                 ai, units,
@@ -2642,6 +2651,7 @@ class RecapPlanBuilder:
                         current=english_rows, next_context=nxt, log=self.log,
                         source_language=language_name,
                         glm_api_key=glm_api_key, glm_model=glm_fallback_model,
+                        azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                     repaired_by_id = {int(row["id"]): row for row in repaired_rows}
                     translated = [repaired_by_id.get(int(row["id"]), row) for row in translated]

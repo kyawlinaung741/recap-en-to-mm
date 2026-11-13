@@ -1672,8 +1672,6 @@ def translate_batch(
     log: LogFn,
     _split_depth: int = 0,
     source_language: str = "English",
-    glm_api_key: str = "",
-    glm_model: str = "glm-4.7-flash",
     azure_api_key: str = "",
     azure_endpoint: str = "",
     azure_deployment: str = "",
@@ -1823,7 +1821,6 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
-            glm_api_key=glm_api_key, glm_model=glm_model,
             azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_deployment,
         )
         combined = translated_left + translated_right
@@ -2554,7 +2551,6 @@ class RecapPlanBuilder:
                         ai, story_context=story_context, previous_context=prev,
                         current=english_rows, next_context=nxt, log=self.log,
                         source_language=language_name,
-                        glm_api_key=glm_api_key, glm_model=glm_fallback_model,
                         azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                     repaired_by_id = {int(row["id"]): row for row in repaired_rows}

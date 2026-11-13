@@ -148,7 +148,7 @@ class NLLBLocalTranslator:
                 translated = str(text or "").strip()
                 for token, burmese_name in restore.items():
                     # SentencePiece may insert spaces inside an unfamiliar Latin token.
-                    token_pattern = re.compile(r"\\s*".join(re.escape(char) for char in token), re.IGNORECASE)
+                    token_pattern = re.compile(r"\s*".join(re.escape(char) for char in token), re.IGNORECASE)
                     if not token_pattern.search(translated):
                         raise RuntimeError(
                             f"NLLB က protected name token ကို မထိန်းနိုင်ပါ။ "

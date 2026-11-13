@@ -2127,8 +2127,8 @@ class RecapPlanBuilder:
             try:
                 tags = translator.session.get(self.ollama_url.rstrip("/") + "/api/tags", timeout=5)
                 tags.raise_for_status()
-                installed = {str(m.get("name", "")).split(":")[0] for m in (tags.json().get("models") or [])}
-                if self.ollama_model.split(":")[0] not in installed:
+                installed = {str(m.get("name", "")).strip() for m in (tags.json().get("models") or [])}
+                if self.ollama_model not in installed and f"{self.ollama_model}:latest" not in installed:
                     raise RuntimeError(f"Ollama model '{self.ollama_model}' is not installed. Run INSTALL_REQUIREMENTS.bat first.")
             except requests.RequestException as exc:
                 raise RuntimeError(

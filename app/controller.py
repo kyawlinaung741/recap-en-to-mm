@@ -1096,7 +1096,11 @@ class App(tk.Tk):
         """Manage Gemini keys and MiMo credentials/models in separate UI sections."""
         env_path = Path(self.gemini_env.get().strip() or (ROOT_DIR / ".env")).expanduser()
         try:
-            existing_lines = env_path.read_text(encoding="utf-8").splitlines() if env_path.is_file() else []
+            raw_env = env_path.read_text(encoding="utf-8") if env_path.is_file() else ""
+            # Repair files saved by the previous MiMo-key dialog, which wrote literal "\n" text.
+            if raw_env and "\n" not in raw_env and r"\n" in raw_env:
+                raw_env = raw_env.replace(r"\n", "\n")
+            existing_lines = raw_env.splitlines()
         except Exception as exc:
             messagebox.showerror("API Keys & Models", f".env ဖိုင်ဖတ်မရပါ။\\n{exc}")
             return
@@ -1160,17 +1164,17 @@ class App(tk.Tk):
             row=11, column=0, columnspan=2, sticky="w", pady=(0, 6))
         model_options = ("mimo-v2.6-pro", "mimo-v2.6-flash", "mimo-v2.6-pro-ultraspeed")
         ttk.Label(body, text="Story Context Model").grid(
-            row=13, column=0, sticky="w", padx=(0, 12), pady=4)
+            row=12, column=0, sticky="w", padx=(0, 12), pady=4)
         story_model_var = tk.StringVar(
             value=current.get("MIMO_STORY_CONTEXT_MODEL", "mimo-v2.6-pro") or "mimo-v2.6-pro")
         ttk.Combobox(body, textvariable=story_model_var, values=model_options, state="readonly", width=38).grid(
-            row=13, column=1, sticky="ew", pady=4)
+            row=12, column=1, sticky="ew", pady=4)
         ttk.Label(body, text="Translation Fallback Model").grid(
-            row=12, column=0, sticky="w", padx=(0, 12), pady=4)
+            row=13, column=0, sticky="w", padx=(0, 12), pady=4)
         translation_model_var = tk.StringVar(
             value=current.get("MIMO_TRANSLATION_FALLBACK_MODEL", "mimo-v2.6-flash") or "mimo-v2.6-flash")
         ttk.Combobox(body, textvariable=translation_model_var, values=model_options, state="readonly", width=38).grid(
-            row=12, column=1, sticky="ew", pady=4)
+            row=13, column=1, sticky="ew", pady=4)
 
         ttk.Label(body, text="အကွက်ဗလာထားရင် သက်ဆိုင်ရာ API Key ကို .env မှ ဖယ်ရှားပါမယ်။\\n"
                              "Model နှစ်ခုကို သီးခြားရွေးနိုင်ပြီး Save လုပ်ပြီးနောက် START / RESUME မှာ အသုံးပြုပါမယ်။",

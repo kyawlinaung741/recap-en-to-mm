@@ -26,8 +26,9 @@ def _load_model(source_code: str, log: Callable[[str], None]) -> tuple[Any, Any,
         from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
     except Exception as exc:
         raise RuntimeError(
-            "NLLB Local လိုအပ်တဲ့ PyTorch / Transformers မရှိပါ။ "
-            "INSTALL_REQUIREMENTS.bat ကို run ပြီး NLLB packages ကို install လုပ်ပါ။"
+            "NLLB Local အတွက် PyTorch / Transformers / SentencePiece လိုအပ်ပါတယ်။ "
+            "INSTALL_REQUIREMENTS.bat နဲ့ Transformers packages ကို install လုပ်ပါ။ "
+            "PyTorch မရှိသေးရင် သင့် GPU နဲ့ကိုက်ညီတဲ့ PyTorch build ကို သီးခြား install လုပ်ပါ။"
         ) from exc
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -1294,11 +1294,16 @@ def _mimo_chat_json(
         "temperature": 0.2,
         "stream": False,
     }
+    proxy = str(os.getenv("MIMO_PROXY") or os.getenv("GEMINI_PROXY") or "").strip()
+    proxies = None
+    if proxy and proxy.lower() not in {"none", "off", "direct", "0"}:
+        proxies = {"http": proxy, "https": proxy}
     response = requests.post(
         "https://api.xiaomimimo.com/v1/chat/completions",
         headers={"api-key": key, "Content-Type": "application/json"},
         json=payload,
         timeout=max(30, min(int(timeout_seconds), 600)),
+        proxies=proxies,
     )
     if response.status_code >= 400:
         detail = (response.text or "")[:1200]

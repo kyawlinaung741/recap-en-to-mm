@@ -2032,7 +2032,11 @@ class RecapPlanBuilder:
         gemini_text_model: str = "gemini-3.5-flash",
         source_language: str = "auto",
         whisper_model_other: str = WHISPER_MODEL_OTHER,
+        translation_engine: str = "gemini",
     ):
+        self.translation_engine = str(translation_engine or "gemini").strip().lower()
+        if self.translation_engine not in {"gemini", "nllb"}:
+            raise ValueError(f"Unsupported translation engine: {self.translation_engine}")
         self.source_language = str(source_language or "auto").strip().lower()
         self.whisper_model_other = str(whisper_model_other or WHISPER_MODEL_OTHER).strip()
         self.runtime_root = Path(runtime_root).resolve()
@@ -2152,7 +2156,9 @@ class RecapPlanBuilder:
         plan_file = job_dir / "smart_sync_plan.json"
         state_file = job_dir / "planner_checkpoint.json"
         fp = _source_fingerprint_for_mode(
-            source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}")
+            source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}|translation:{self.translation_engine}")
+        gemini_transcript_fp = _source_fingerprint_for_mode(
+            source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}|translation:gemini")
         # Keep existing local Whisper transcripts when upgrading the text-provider pipeline.
         legacy_transcript_fp = _source_fingerprint_for_mode(
             source, "timestamp_translation_en_to_mm_narrator_v4_glm_story_context|" + direction
@@ -2240,7 +2246,7 @@ class RecapPlanBuilder:
         if reuse and transcript_file.is_file() and state_file.is_file():
             try:
                 state = json.loads(state_file.read_text(encoding="utf-8"))
-                if state.get("source_fingerprint") in {fp, legacy_transcript_fp, previous_provider_transcript_fp} and state.get("transcript_ready") is True:
+                if state.get("source_fingerprint") in {fp, gemini_transcript_fp, legacy_transcript_fp, previous_provider_transcript_fp} and state.get("transcript_ready") is True:
                     candidate = json.loads(transcript_file.read_text(encoding="utf-8"))
                     if (
                         candidate.get("backend") in {"faster-whisper", "openai-whisper"}
@@ -2337,7 +2343,7 @@ class RecapPlanBuilder:
             )
 
             self.progress(1, 4, "Story context memory")
-            self.log(f"🧠 [2/4] Story Context — Gemini only ({self.gemini_text_model})...")
+            self.log(f"🧠 [2/4] Story Context — Gemini ({self.gemini_text_model})...")
             context_source_fp = fp + "|seg:" + segmentation_profile + "|gemini:" + str(self.gemini_text_model)
             story_context = build_story_context(
                 ai, units,
@@ -2355,9 +2361,17 @@ class RecapPlanBuilder:
                 "context": story_context,
             })
 
-            self.log("📚 Translation provider receives the complete Story Context memory and canonical Burmese name glossary in every batch.")
+            self.log("📚 Translation engine receives Story Context and the canonical Burmese name glossary.")
             self.progress(2, 4, "Timestamp translation")
-            self.log(f"🌐 [3/4] Gemini {language_name} → Myanmar translation — narrator source | no summary / no shortening...")
+            if self.translation_engine == "nllb":
+                self.log(f"🌐 [3/4] NLLB-200 Local {language_name} → Myanmar — no translation API / no per-character fee...")
+                from nllb_local import NLLBLocalTranslator
+                nllb_translator = NLLBLocalTranslator(
+                    whisper_language, log=self.log, should_stop=self.should_stop
+                )
+            else:
+                self.log(f"🌐 [3/4] Gemini {language_name} → Myanmar translation — narrator source | no summary / no shortening...")
+                nllb_translator = None
             batches = _batch_by_size(units, max_items=self.translation_batch_max_items, max_chars=16000)
             translated_all: list[dict[str, Any]] = []
             if reuse and translations_file.is_file():
@@ -2365,6 +2379,7 @@ class RecapPlanBuilder:
                     saved = json.loads(translations_file.read_text(encoding="utf-8"))
                     saved_items = saved.get("items") or []
                     if (saved.get("planner_mode") == PLANNER_MODE and saved.get("source_fingerprint") == fp
+                            and str(saved.get("translation_engine") or "gemini") == self.translation_engine
                             and str(saved.get("segmentation_profile") or "") == segmentation_profile
                             and isinstance(saved_items, list)):
                         saved_by_id: dict[int, dict[str, Any]] = {}
@@ -2446,15 +2461,28 @@ class RecapPlanBuilder:
                 nxt = units[last_index + 1:last_index + 1 + self.lookahead] if self.lookahead else []
                 self.log(f"🌐 Translate batch {bi}/{len(batches)} — IDs {batch[0]['id']:05d}–{batch[-1]['id']:05d}")
                 try:
-                    translated = translate_batch(
-                        ai,
-                        story_context=story_context,
-                        previous_context=prev,
-                        current=batch,
-                        next_context=nxt,
-                        log=self.log,
-                        source_language=language_name,
-                    )
+                    if self.translation_engine == "nllb":
+                        assert nllb_translator is not None
+                        translated = nllb_translator.translate_batch(
+                            batch, glossary=list(story_context.get("name_glossary") or [])
+                        )
+                        _assert_no_adjacent_translation_duplicates(translated, prev)
+                        name_issues = _character_name_issues(
+                            batch, translated, list(story_context.get("name_glossary") or [])
+                        )
+                        if name_issues:
+                            raise RuntimeError("NLLB canonical-name validation failed: " + "; ".join(name_issues[:10]))
+                        _assert_speakable_translation_items(translated)
+                    else:
+                        translated = translate_batch(
+                            ai,
+                            story_context=story_context,
+                            previous_context=prev,
+                            current=batch,
+                            next_context=nxt,
+                            log=self.log,
+                            source_language=language_name,
+                        )
                 except GeminiKeyPoolExhaustedError as exc:
                     saved = len(translated_all)
                     remaining = len(units) - saved
@@ -2463,7 +2491,7 @@ class RecapPlanBuilder:
                         f"{exc}\n\nSaved progress: {saved}/{len(units)} units; "
                         f"remaining: {remaining}. Resume will start at ID {batch_ids[0]:05d}."
                     ) from exc
-                if self.translation_audit:
+                if self.translation_audit and self.translation_engine == "gemini":
                     translated = audit_and_repair_batch(
                         ai,
                         translated,
@@ -2475,6 +2503,9 @@ class RecapPlanBuilder:
                 # The audit may rewrite a line. Re-run any such row through the strict
                 # translator before it reaches the checkpoint or Myanmar TTS.
                 english_rows = [row for row in translated if _latin_words(row.get("translation"))]
+                if english_rows and self.translation_engine == "nllb":
+                    ids = ", ".join(f"{int(row['id']):05d}" for row in english_rows)
+                    raise RuntimeError(f"NLLB output still contains Latin/English text in IDs {ids}; refusing to send it to TTS.")
                 if english_rows:
                     ids = ", ".join(f"{int(row['id']):05d}" for row in english_rows)
                     self.log(f"🔁 Re-translating {len(english_rows)} audit line(s) containing English: {ids}")
@@ -2512,6 +2543,7 @@ class RecapPlanBuilder:
                 completed_ids.update(int(x["id"]) for x in translated)
                 _atomic_json(translations_file, {
                     "planner_mode": PLANNER_MODE,
+                    "translation_engine": self.translation_engine,
                     "segmentation_profile": segmentation_profile,
                     "source_fingerprint": fp,
                     "translation_direction": direction,

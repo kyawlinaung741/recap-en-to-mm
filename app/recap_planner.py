@@ -2469,6 +2469,12 @@ class RecapPlanBuilder:
                         translated = nllb_translator.translate_batch(
                             batch, glossary=list(story_context.get("name_glossary") or [])
                         )
+                        translated = [
+                            {**row, "translation": _normalize_spoken_burmese(
+                                _sanitize_translation_text(row.get("translation"))
+                            )}
+                            for row in translated
+                        ]
                         _assert_no_adjacent_translation_duplicates(translated, prev)
                         name_issues = _character_name_issues(
                             batch, translated, list(story_context.get("name_glossary") or [])

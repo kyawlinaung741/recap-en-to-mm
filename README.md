@@ -271,8 +271,8 @@ videos into parts.
    letters). Where Whisper writes few sentence marks, the end of a Whisper segment counts as a sentence end.
 2. **Split** — sentence/clause/pause boundaries give short sync units (about 4.2 s, at most 5.6 s);
    more units = more sync anchors.
-3. **Story memory** — MiMo reads the complete movie transcript in chunks and builds the movie-wide context and canonical source-name → Pinyin → Burmese-pronunciation glossary.
-4. **Translate** — Gemini reads that MiMo memory and leads translation of up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing). MiMo is used as a translation fallback only when Gemini's configured model/key chain cannot complete a batch.
+3. **Story memory** — MiMo reads the complete movie transcript in chunks and builds the movie-wide context and canonical source-name → Pinyin → Burmese-pronunciation glossary. If MiMo Story Context fails, Gemini automatically builds that context chunk with the same context instructions.
+4. **Translate** — Gemini reads that MiMo memory and leads translation of up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing). MiMo is used as a translation fallback only when Gemini's configured model/key chain cannot complete a batch. MiMo receives the exact same full translation prompt, Story Context, ID list, and validation rules as Gemini.
    (no summary, no shortening, every unit keeps its own content), then an audit pass repairs
    omissions/shifts/duplicates. A known name mentioned in a source line must appear with its exact
    glossary spelling in Burmese; inconsistent names are retried and never silently accepted. Letters of
@@ -301,7 +301,7 @@ optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself)
 2. Run **`INSTALL_REQUIREMENTS.bat`** (pip packages, Chromium for the Myanmar title renderer, and
    FFmpeg: when it is not on PATH or in `C:\ffmpeg\bin`, about 100 MB is downloaded into `ffmpeg\`).
    `[WinError 2] The system cannot find the file specified` means FFmpeg is missing — run it again.
-3. Copy **`.env.example`** to **`.env`** and set both `GEMINI_API_KEY=` and `MIMO_API_KEY=`. MiMo Story Context uses `mimo-v2.6-pro` by default; Gemini leads translation, and `mimo-v2.6-flash` is the translation fallback. You can change them with `MIMO_STORY_CONTEXT_MODEL` and `MIMO_TRANSLATION_FALLBACK_MODEL`. More keys
+3. Copy **`.env.example`** to **`.env`** and set both `GEMINI_API_KEY=` and `MIMO_API_KEY=`. MiMo Story Context uses `mimo-v2.6-pro` by default; Gemini leads translation, and `mimo-v2.6-flash` is the translation fallback. If MiMo cannot build Story Context, Gemini automatically takes over that context batch. You can change them with `MIMO_STORY_CONTEXT_MODEL` and `MIMO_TRANSLATION_FALLBACK_MODEL`. More keys
    (`GEMINI_IMAGE_PROJECT_1_KEY`, `GEMINI_IMAGE_PROJECT_2_KEY`, …) are used in turn when one is used
    up; after all keys the next model is tried
    (`gemini-3.5-flash → 3.5-flash-lite → 3.6-flash → 3.7-flash → 3.1-flash-lite`).

@@ -40,12 +40,8 @@ def _load_model(source_code: str, log: Callable[[str], None]) -> tuple[Any, Any,
     log(f"🖥️ NLLB device: {device}")
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, use_fast=False)
     dtype = torch.float16 if device == "cuda" else torch.float32
-    try:
-        model = AutoModelForSeq2SeqLM.from_pretrained(
-            MODEL_ID, torch_dtype=dtype, low_cpu_mem_usage=True
-        )
-    except TypeError:
-        model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_ID, torch_dtype=dtype)
+    # Avoid an Accelerate dependency; the distilled 600M checkpoint fits normal loading.
+    model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_ID, torch_dtype=dtype)
     model.to(device)
     model.eval()
     cached = (tokenizer, model, torch.device(device))

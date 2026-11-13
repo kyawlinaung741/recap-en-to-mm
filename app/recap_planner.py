@@ -1419,6 +1419,8 @@ def _merge_name_glossary(
         if key in merged:
             if merged[key]["burmese_name"] != burmese_name and log:
                 log(f"⚠️ Name glossary conflict for {source_name}: keeping {merged[key]['burmese_name']} (new suggestion: {burmese_name})")
+            if isinstance(row, dict) and _clean(row.get("pinyin")) and not merged[key].get("pinyin"):
+                merged[key]["pinyin"] = _clean(row.get("pinyin"))
             continue
         merged[key] = {"source_name": source_name, "burmese_name": burmese_name,
                        **({"pinyin": _clean(row.get("pinyin"))} if isinstance(row, dict) and _clean(row.get("pinyin")) else {})}
@@ -1546,6 +1548,7 @@ SOURCE CHUNK {i}/{len(batches)}:
             except InterruptedError:
                 raise
             except Exception as exc:
+                data = None
                 last_error = exc
                 log(f"⚠️ MiMo Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
                 if attempt < 3:

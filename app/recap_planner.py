@@ -1958,12 +1958,12 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
             except Exception as exc:
                 last_error = exc
                 prefix = "   " * depth
-                log(f"{prefix}⚠️ Sentence-lock audit attempt {attempt}/4 failed ({provider}): {exc}")
+                log(f"{prefix}⚠️ Sentence-lock audit attempt {attempt}/6 failed ({provider}): {exc}")
                 if provider == "azure" and azure_attempts >= 3:
                     provider = "gemini"
                     log(f"{prefix}🛟 Azure AI Foundry audit retries failed; switching this audit batch to Gemini.")
                     prompt = base_prompt
-                elif provider == "gemini" and gemini_attempts >= 4:
+                elif provider == "gemini" and gemini_attempts >= 3:
                     break
                 else:
                     prompt = (

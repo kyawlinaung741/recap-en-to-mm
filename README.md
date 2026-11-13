@@ -18,13 +18,13 @@ Myanmar story narration · Whisper + Gemini translation · Edge TTS / Gemini TTS
    - English ဆို `small.en` (~460 MB)၊ တခြားဘာသာဆို `medium` (~1.5 GB, multilingual) နဲ့ နားထောင်တယ်။ Model တွေကို ပထမဆုံးအကြိမ်ပဲ download လုပ်ရတယ်။
    - ဟိန္ဒီနဲ့ Urdu က အသံတူလို့ Auto-detect မှာ Urdu ထွက်ရင် ဟိန္ဒီအဖြစ် ရေးတယ်။
 2. **အပိုင်းခွဲ** — စာကြောင်း၊ သဘာဝကျတဲ့ စကားစုနဲ့ အသံရပ်တဲ့နေရာတွေကို အခြေခံပြီး sync unit ခွဲတယ်။ စာကြောင်းရှည်ရင် အသက်ရှူရပ်နားလို့ သင့်တဲ့ နေရာမှာ ခွဲပေးတယ်။
-3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Gemini က ဇာတ်လမ်းတစ်ခုလုံးကို အရင်ဖတ်ပြီး ဇာတ်ကောင်နာမည်၊ ဆက်နွယ်မှု၊ နေရာတွေကို မှတ်ထားတယ်။ ဒါကြောင့် နာမည်တွေ တစ်ပုဒ်လုံး တစ်မျိုးတည်း ဖြစ်တယ်။
+3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Gemini က ဇာတ်လမ်းတစ်ခုလုံးကို အရင်ဖတ်ပြီး မူရင်းနာမည် → မြန်မာအသံထွက်ဆိုတဲ့ Canonical Name Glossary တစ်ခု တည်ဆောက်တယ်။ ဘာသာပြန် batch အားလုံးက အဲဒီနာမည်စာရင်းတစ်ခုတည်းကို မဖြစ်မနေ သုံးတယ်။
 4. **ဘာသာပြန်** — Gemini က တစ်ခါမှာ အပိုင်း ၄၀ အထိ မြန်မာ Narrator ပုံစံနဲ့ ပြန်တယ်။
    - မူရင်းဇာတ်လမ်းရဲ့ အချက်အလက်၊ အစဉ်လိုက်ဖြစ်စဉ်၊ ဇာတ်ကောင်နာမည်နဲ့ ဆက်နွယ်မှုတွေကို ထိန်းထားပြီး သဘာဝကျတဲ့ မြန်မာဇာတ်ကြောင်းပြောပုံစံ သုံးတယ်။ Direct Dub ပုံစံ မဟုတ်ဘူး။
    - A/B/C/S အဆင့်သတ်မှတ်ချက်တွေကို subtitle စာသားမှာ မူရင်းအတိုင်း ထိန်းပြီး Narrator ဖတ်တဲ့အခါမှ အေ/ဘီ/စီ/အက်စ် အဆင့်လို့ အသံထွက်ပြောင်းပေးတယ်။
    - နံပါတ်နဲ့ ရာခိုင်နှုန်းတွေကို မြန်မာစကားပြောပုံစံအဖြစ် ပြောင်းပြီး `%` ကို ရာခိုင်နှုန်း၊ `&` ကို နှင့် လို့ ပြောင်းပေးတယ်။
    - အကျဉ်းမချုပ်ဘူး၊ ချန်မထားဘူး။ အပိုင်းတစ်ခုရဲ့ အကြောင်းအရာကို ဘေးအပိုင်းထဲ မရွှေ့ဘူး။
-   - ပြန်ပြီးတိုင်း စစ်ဆေးတဲ့အဆင့် (audit) က ချန်ခဲ့တာ၊ နေရာလွဲတာ၊ ထပ်နေတာတွေကို ပြန်ပြင်တယ်။
+   - ပြန်ပြီးတိုင်း စစ်ဆေးတဲ့အဆင့် (audit) က ချန်ခဲ့တာ၊ နေရာလွဲတာ၊ ထပ်နေတာတွေကို ပြန်ပြင်တယ်။ မူရင်းစာကြောင်းထဲမှာ glossary ထဲက ဇာတ်ကောင်နာမည် ပါလာရင် သတ်မှတ်ထားတဲ့ မြန်မာနာမည်ကို မဖြစ်မနေ ပါစေပြီး မတူရင် ပြန်ဘာသာပြန်တယ်။
    - မြန်မာစာလုံးထဲ တခြားဘာသာ စာလုံး ညှပ်ဝင်လာရင် (ဥပမာ "ဧည့်ခန်း" နေရာမှာ "မისခန်း") Gemini ကို ပြန်မေးတယ်။
 5. **အသံထုတ်** — ရွေးထားတဲ့ Narrator engine နဲ့ မြန်မာအသံ ထုတ်တယ်။ Edge TTS မှာ Voice, Speed နဲ့ Pitch ကို ချိန်နိုင်တယ်။ Voice track ကို loudness normalization နဲ့ peak limiting လုပ်တယ်။
 6. **Smart Sync** — မြန်မာအသံက အချိန်ကို ဦးဆောင်ပြီး ရုပ်က လိုက်ညှိတယ်။ အသေးစိတ်ကို [Smart Sync ဘယ်လိုအလုပ်လုပ်လဲ](#smart-sync-ဘယ်လိုအလုပ်လုပ်လဲ) မှာ ကြည့်ပါ။
@@ -268,12 +268,13 @@ videos into parts.
    letters). Where Whisper writes few sentence marks, the end of a Whisper segment counts as a sentence end.
 2. **Split** — sentence/clause/pause boundaries give short sync units (about 4.2 s, at most 5.6 s);
    more units = more sync anchors.
-3. **Story memory** — Gemini reads the whole transcript first and keeps names, relationships and
-   places consistent.
+3. **Story memory** — Gemini builds one movie-wide canonical source-name → Burmese-pronunciation glossary,
+   then every translation batch must use those exact spellings.
 4. **Translate** — Gemini translates up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing)
    (no summary, no shortening, every unit keeps its own content), then an audit pass repairs
-   omissions/shifts/duplicates. Letters of another script inside the Burmese (e.g. Georgian "მის"
-   inside "ဧည့်ခန်း") are asked again, and if still there removed and logged.
+   omissions/shifts/duplicates. A known name mentioned in a source line must appear with its exact
+   glossary spelling in Burmese; inconsistent names are retried and never silently accepted. Letters of
+   another script inside the Burmese (e.g. Georgian "მის" inside "ဧည့်ခန်း") are also asked again.
 5. **Voice** — Myanmar narrator audio from the selected engine. Edge TTS provides adjustable voice / rate / pitch;
    the rendered voice track is loudness-normalized and peak-limited.
 6. **Smart Sync** — every unit owns a window of the original picture (the silence between two units

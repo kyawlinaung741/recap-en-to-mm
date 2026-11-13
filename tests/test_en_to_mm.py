@@ -86,6 +86,22 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         self.assertIn("letters of another script", prompts[1])
         self.assertEqual(rp._foreign_letters("ဧည့်ခန်း (living room)"), [])
 
+    def test_foreign_script_is_never_silently_stripped_after_retries(self):
+        prompts = []
+
+        def answer(_ai, prompt, **_kw):
+            prompts.append(prompt)
+            return {"items": [{"id": 1, "translation": "მისခန်းထဲမှာ မီးခိုးတွေ"}]}
+
+        with mock.patch.object(rp, "_gemini_json", answer):
+            with self.assertRaisesRegex(RuntimeError, "could not be validated"):
+                rp.translate_batch(
+                    None, story_context={}, previous_context=[],
+                    current=[_unit(1, 0.0, 2.0, "The living room was full of smoke.")],
+                    next_context=[], log=lambda _m: None,
+                )
+        self.assertEqual(len(prompts), 4)
+
     def test_spoken_text_normalization_converts_numbers_percent_and_ampersand(self):
         self.assertEqual(
             rp._normalize_spoken_burmese("၂၀၂၅"), "နှစ်ထောင် နှစ်ဆယ့်ငါး"

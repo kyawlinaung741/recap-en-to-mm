@@ -1931,18 +1931,31 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
                     f"{prefix}✅ Sentence-lock audit: every ID passed"
                 )
                 return audited
-            except GeminiKeyPoolExhaustedError:
+            except GeminiKeyPoolExhaustedError as exc:
+                last_error = exc
+                if provider == "gemini" and mimo_api_key:
+                    provider = "mimo"
+                    prefix = "   " * depth
+                    log(f"{prefix}🛟 Gemini audit fallback exhausted; switching this audit batch to MiMo.")
+                    continue
                 raise
             except Exception as exc:
                 last_error = exc
                 prefix = "   " * depth
-                log(f"{prefix}⚠️ Sentence-lock audit attempt {attempt}/2 failed: {exc}")
-                prompt = (
-                    base_prompt
-                    + f"\n\nCORRECTION REQUIRED: {exc}. "
-                      f"Return the full checks array for every CURRENT ID. "
-                      f"The exact ID list is {exact_ids_json}; do not renumber it."
-                )
+                log(f"{prefix}⚠️ Sentence-lock audit attempt {attempt}/4 failed ({provider}): {exc}")
+                if provider == "gemini" and gemini_attempts >= 2 and mimo_api_key:
+                    provider = "mimo"
+                    log(f"{prefix}🛟 Gemini audit retries failed; switching this audit batch to MiMo.")
+                    prompt = base_prompt
+                elif provider == "mimo" and mimo_attempts >= 2:
+                    break
+                else:
+                    prompt = (
+                        base_prompt
+                        + f"\\n\\nCORRECTION REQUIRED: {exc}. "
+                          f"Return the full checks array for every CURRENT ID. "
+                          f"The exact ID list is {exact_ids_json}; do not renumber it."
+                    )
 
         # V23 creates roughly twice as many short local-sync IDs as the older planner.
         # If a large late batch still confuses Gemini's audit response, preserve the

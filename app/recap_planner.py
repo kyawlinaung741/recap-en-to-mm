@@ -7,6 +7,7 @@ import json
 import math
 import os
 import re
+import requests
 import difflib
 import shutil
 import subprocess
@@ -19,7 +20,7 @@ from typing import Any, Callable
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[int, int, str], None]
-PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v3_quality"
+PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v3_mimo_story_context"
 TRANSLATION_DIRECTION = "en_to_mm"   # an English video's direction; others are "<code>_to_mm" (2026-10-17)
 # Whole-sentence lines like VOXCPM recap (2026-10-12): a line ends at a sentence end (or a clause after 6.5 s,
 # a breath after 10 s, at most 24 s). The old 4-6 s lines cut 20-35% of sentences in two, and Gemini then told a
@@ -1113,6 +1114,7 @@ _STORY_CONTEXT_RESPONSE_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "source_name": {"type": "STRING"},
                     "burmese_name": {"type": "STRING"},
+                    "pinyin": {"type": "STRING"},
                 },
                 "required": ["source_name", "burmese_name"],
             },
@@ -1270,6 +1272,97 @@ def _gemini_json(
     raise RuntimeError(f"Gemini JSON response failed after {retries} attempts: {last}")
 
 
+
+def _mimo_chat_json(
+    api_key: str,
+    prompt: str,
+    *,
+    model: str,
+    timeout_seconds: int = 180,
+) -> Any:
+    """Call Xiaomi MiMo's OpenAI-compatible Chat Completions endpoint and parse JSON."""
+    key = str(api_key or "").strip()
+    if not key:
+        raise RuntimeError("MIMO_API_KEY မတွေ့ပါ။ MiMo API key ကို .env ထဲထည့်ပါ။")
+    payload = {
+        "model": str(model or "mimo-v2.6-pro"),
+        "messages": [
+            {"role": "system", "content": "You are a precise assistant. Follow the user's output format exactly."},
+            {"role": "user", "content": prompt},
+        ],
+        "max_completion_tokens": 12000,
+        "temperature": 0.2,
+        "stream": False,
+    }
+    response = requests.post(
+        "https://api.xiaomimimo.com/v1/chat/completions",
+        headers={"api-key": key, "Content-Type": "application/json"},
+        json=payload,
+        timeout=max(30, min(int(timeout_seconds), 600)),
+    )
+    if response.status_code >= 400:
+        detail = (response.text or "")[:1200]
+        raise RuntimeError(f"MiMo API HTTP {response.status_code}: {detail}")
+    data = response.json()
+    choices = data.get("choices") or []
+    if not choices:
+        raise RuntimeError("MiMo API returned no choices")
+    choice = choices[0] or {}
+    if choice.get("finish_reason") == "length":
+        raise RuntimeError("MiMo response was truncated (finish_reason=length)")
+    message = choice.get("message") or {}
+    raw = str(message.get("content") or "").strip()
+    if not raw:
+        raise RuntimeError("MiMo returned an empty response")
+    parsed = _extract_json_payload(raw)
+    if not isinstance(parsed, dict):
+        raise RuntimeError("MiMo response must be a JSON object")
+    return parsed
+
+
+def _validate_translation_candidate(
+    current: list[dict[str, Any]],
+    payload: Any,
+    *,
+    story_context: dict[str, Any],
+    previous_context: list[dict[str, Any]],
+    next_context: list[dict[str, Any]],
+    log: LogFn,
+) -> list[dict[str, Any]]:
+    translated = _validate_translation_items(current, payload, log=log)
+    name_issues = _character_name_issues(
+        current, translated, list(story_context.get("name_glossary") or [])
+    )
+    if name_issues:
+        raise ValueError("Canonical character/place names are inconsistent: " + "; ".join(name_issues[:10]))
+    _assert_no_adjacent_translation_duplicates(translated, previous_context)
+    stray = [f"ID {int(x['id']):05d}: {' '.join(_foreign_letters(x['translation']))}"
+             for x in translated if _foreign_letters(x["translation"])]
+    if stray:
+        raise ValueError("letters of another script inside the Burmese (" + "; ".join(stray[:10]) +
+                         "); invalid characters are never stripped because that can corrupt a Burmese word.")
+    english = [f"ID {int(x['id']):05d}: {', '.join(_latin_words(x['translation']))}"
+               for x in translated if _latin_words(x["translation"])]
+    notes = [f"ID {int(x['id']):05d}" for x in translated if _note_text(x["translation"])]
+    repeats = find_repeated_next_lines(translated, previous_context)
+    twice = find_near_duplicates(translated, previous_context)
+    slid = _slid_runs(translated, next_context[0].get("source_text") if next_context else None)
+    problems = []
+    if english:
+        problems.append("English/Latin words remain: " + "; ".join(english[:8]))
+    if notes:
+        problems.append("non-narration/empty Burmese lines: " + ", ".join(notes[:8]))
+    if repeats:
+        problems.append("adjacent ID repetition: " + ", ".join(f"{a:05d}/{b:05d}" for a, b in repeats[:8]))
+    if twice:
+        problems.append("near-duplicate translations: " + ", ".join(f"{a:05d}/{b:05d}" for a, b in twice[:8]))
+    if slid:
+        problems.append("possible one-ID-early alignment drift: " + ", ".join(f"{a:05d}-{b:05d}" for a, b in slid[:8]))
+    if problems:
+        raise ValueError("; ".join(problems))
+    _assert_speakable_translation_items(translated)
+    return translated
+
 def _load_runtime_config(runtime_root: Path) -> dict[str, Any]:
     path = runtime_root / "config" / "whisper.json"  # optional: whisper_backend / whisper_device / whisper_compute_type
     if not path.is_file():
@@ -1301,6 +1394,7 @@ def _merge_name_glossary(
         if source_name and burmese_name:
             merged.setdefault(_name_key(source_name), {
                 "source_name": source_name, "burmese_name": burmese_name,
+                **({"pinyin": _clean(row.get("pinyin"))} if _clean(row.get("pinyin")) else {}),
             })
 
     # Migrate older Story Context entries such as "Christopher → ခရစ်စတိုဖာ".
@@ -1326,7 +1420,8 @@ def _merge_name_glossary(
             if merged[key]["burmese_name"] != burmese_name and log:
                 log(f"⚠️ Name glossary conflict for {source_name}: keeping {merged[key]['burmese_name']} (new suggestion: {burmese_name})")
             continue
-        merged[key] = {"source_name": source_name, "burmese_name": burmese_name}
+        merged[key] = {"source_name": source_name, "burmese_name": burmese_name,
+                       **({"pinyin": _clean(row.get("pinyin"))} if isinstance(row, dict) and _clean(row.get("pinyin")) else {})}
     return list(merged.values())
 
 
@@ -1367,8 +1462,13 @@ def build_story_context(
     checkpoint_path: Path | None = None,
     source_fingerprint: str = "",
     reuse: bool = True,
+    mimo_api_key: str = "",
+    mimo_model: str = "mimo-v2.6-pro",
+    source_language: str = "Chinese",
 ) -> dict[str, Any]:
-    """Create durable context memory in a separate pass before translation, resumably."""
+    """MiMo builds movie-wide context first; Gemini consumes this memory during translation."""
+    if not str(mimo_api_key or "").strip():
+        raise RuntimeError("MiMo Story Context အတွက် MIMO_API_KEY မတွေ့ပါ။ .env ထဲမှာ MIMO_API_KEY=... ထည့်ပါ။")
     batches = _batch_by_size(units, max_items=batch_max_items, max_chars=24000)
     memory: dict[str, Any] = {
         "characters": [], "relationships": [], "places": [], "terms": [],
@@ -1378,47 +1478,54 @@ def build_story_context(
     if reuse and checkpoint_path and checkpoint_path.is_file():
         try:
             saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-            if (saved.get("version") == 2 and saved.get("planner_mode") == PLANNER_MODE
+            if (saved.get("version") == 3 and saved.get("planner_mode") == PLANNER_MODE
                     and saved.get("source_fingerprint") == source_fingerprint):
                 completed = int(saved.get("completed_batches", 0) or 0)
                 saved_memory = saved.get("context")
                 if 0 <= completed <= len(batches) and isinstance(saved_memory, dict):
                     memory = saved_memory
                     if completed:
-                        log(f"♻️ Story Context resume — {completed}/{len(batches)} batches already done")
+                        log(f"♻️ MiMo Story Context resume — {completed}/{len(batches)} batches already done")
                 else:
                     completed = 0
         except Exception:
             completed = 0
 
-    # Normalize older checkpoints that predate the structured glossary field.
     memory["name_glossary"] = _merge_name_glossary(
-        list(memory.get("name_glossary") or []),
-        [],
-        legacy_entries=memory.get("name_consistency") or [],
-        log=log,
+        list(memory.get("name_glossary") or []), [],
+        legacy_entries=memory.get("name_consistency") or [], log=log,
     )
+    chinese_source = str(source_language or "").lower() in {"chinese", "zh", "zh-cn", "zh-tw"}
     for i, batch in enumerate(batches, 1):
         if i <= completed:
             continue
         if should_stop():
-            raise InterruptedError("STOP requested during story-context pass")
+            raise InterruptedError("STOP requested during MiMo story-context pass")
+        pinyin_rule = (
+            "- For every Chinese personal/place/organization name, include standard Mandarin Pinyin with tone marks "
+            "when confidently known; for ambiguous/polyphonic names use context and mark uncertain cases in unresolved. "
+            "Do not guess Pinyin when uncertain.\n"
+            if chinese_source else
+            "- Pinyin is not applicable to this source language; use an empty pinyin string.\n"
+        )
         prompt = f"""
-You are building CONTEXT MEMORY for a later translation task.
-Do not translate the transcript now. Do not write narration. Do not summarize away named facts.
-Read this next chronological source chunk and UPDATE the existing compact context memory.
-The memory exists only to keep names, relationships, terminology, locations, identities,
-and the current story state consistent when later translation requests are sent in separate API calls.
+You are the movie-wide STORY CONTEXT ANALYST. This is a CONTEXT-MEMORY task, NOT translation.
+Read the next chronological transcript chunk and update the existing memory. Do not write narration.
+Identify every named character, aliases/nicknames, family and social relationships, roles/titles,
+locations, organizations, objects, terminology, chronology, reveals and plot state.
 
-RULES:
-- Preserve exact character/place/object names as they appear in the source when known.
-- Keep important relationships, aliases, roles, reveals, and terminology.
-- For every recurring person, place, organization, skill, or named object, add a name_glossary object with exact source_name and ONE Burmese-script burmese_name.
-- name_glossary is the canonical dictionary for the ENTIRE movie, not just this chunk. Never change an existing spelling for the same source_name; add new names only. If a later chunk explicitly proves an earlier identity/name was wrong, record the correction in unresolved rather than silently changing the canonical spelling.
-- Also keep name_consistency as concise human-readable notes, but name_glossary is authoritative.
-- Keep plot_state chronological but compact. Do not invent anything.
-- If an earlier assumption is corrected by this chunk, update it.
-Return the context memory in the structured format specified by the response schema. Keep it concise enough to reuse in every later request.
+CANONICAL NAME RULES:
+- Preserve each exact source-language name as it appears in the transcript.
+- For every recurring or plot-important named person, place or organization, add a name_glossary object:
+  source_name (exact original spelling), pinyin, burmese_name (one consistent Burmese phonetic rendering).
+{pinyin_rule}- Burmese names must be Burmese script, sound-based, consistent, and not translated by meaning.
+- Keep aliases linked to the same character in characters/relationships and note aliases in name_consistency.
+- Never silently change an established Burmese spelling. If new evidence proves an identity was wrong,
+  explain it in unresolved for later review.
+- Include important minor/one-off named characters too; do not omit names merely because they appear once.
+- Do not invent facts. Keep the memory concise but complete enough for a separate translator to use.
+Return one valid JSON object only with keys: characters, relationships, places, terms, plot_state,
+name_consistency, name_glossary, unresolved. name_glossary items contain source_name, burmese_name, pinyin.
 
 EXISTING MEMORY:
 {json.dumps(memory, ensure_ascii=False)}
@@ -1426,49 +1533,50 @@ EXISTING MEMORY:
 SOURCE CHUNK {i}/{len(batches)}:
 {_source_lines(batch)}
 """
-        try:
-            data = _gemini_json(ai, prompt, log=log, response_schema=_STORY_CONTEXT_RESPONSE_SCHEMA)
-            if not isinstance(data, dict):
-                raise RuntimeError("Story context response must be a JSON object")
-        except (GeminiKeyPoolExhaustedError, InterruptedError):
-            raise
-        except Exception as exc:
-            # 2026-10-12, a user's run: "Gemini JSON response failed after 3 attempts: Expecting ':' delimiter"
-            # stopped the whole job here (Resume then worked). The memory only helps keep names consistent,
-            # so one unreadable chunk is left out and the job goes on.
-            log(f"⚠️ Story Context {i}/{len(batches)}: Gemini's answer could not be read ({str(exc)[:160]}); "
-                "this part is left out of the story memory")
-            data = memory
+        last_error = None
+        data = None
+        for attempt in range(1, 4):
+            try:
+                data = _mimo_chat_json(mimo_api_key, prompt, model=mimo_model)
+                required = ("characters", "relationships", "places", "terms", "plot_state",
+                            "name_consistency", "name_glossary", "unresolved")
+                if any(not isinstance(data.get(k), list) for k in required):
+                    raise ValueError("MiMo Story Context JSON is missing required list fields")
+                break
+            except InterruptedError:
+                raise
+            except Exception as exc:
+                last_error = exc
+                log(f"⚠️ MiMo Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
+                if attempt < 3:
+                    time.sleep(attempt * 1.5)
+        if data is None:
+            raise RuntimeError(
+                f"MiMo Story Context {i}/{len(batches)} မအောင်မြင်ပါ။ ဘာသာပြန်မှုကို မစတင်ပါ။ "
+                f"အကြောင်းရင်း: {last_error}"
+            ) from last_error
+
         memory = {
-            "characters": list(data.get("characters") or []),
-            "relationships": list(data.get("relationships") or []),
-            "places": list(data.get("places") or []),
-            "terms": list(data.get("terms") or []),
-            "plot_state": list(data.get("plot_state") or []),
-            "name_consistency": list(dict.fromkeys(
-                list(memory.get("name_consistency") or []) + list(data.get("name_consistency") or [])
-            )),
+            "characters": list(dict.fromkeys(list(memory.get("characters") or []) + list(data.get("characters") or []))),
+            "relationships": list(dict.fromkeys(list(memory.get("relationships") or []) + list(data.get("relationships") or []))),
+            "places": list(dict.fromkeys(list(memory.get("places") or []) + list(data.get("places") or []))),
+            "terms": list(dict.fromkeys(list(memory.get("terms") or []) + list(data.get("terms") or []))),
+            "plot_state": list(memory.get("plot_state") or []) + list(data.get("plot_state") or []),
+            "name_consistency": list(dict.fromkeys(list(memory.get("name_consistency") or []) + list(data.get("name_consistency") or []))),
             "name_glossary": _merge_name_glossary(
-                list(memory.get("name_glossary") or []),
-                data.get("name_glossary"),
-                legacy_entries=(
-                    list(memory.get("name_consistency") or [])
-                    + list(data.get("name_consistency") or [])
-                ),
+                list(memory.get("name_glossary") or []), data.get("name_glossary"),
+                legacy_entries=list(memory.get("name_consistency") or []) + list(data.get("name_consistency") or []),
                 log=log,
             ),
-            "unresolved": list(data.get("unresolved") or []),
+            "unresolved": list(dict.fromkeys(list(memory.get("unresolved") or []) + list(data.get("unresolved") or []))),
         }
         if checkpoint_path:
             _atomic_json(checkpoint_path, {
-                "version": 2,
-                "planner_mode": PLANNER_MODE,
+                "version": 3, "planner_mode": PLANNER_MODE,
                 "source_fingerprint": source_fingerprint,
-                "completed_batches": i,
-                "total_batches": len(batches),
-                "context": memory,
+                "completed_batches": i, "total_batches": len(batches), "context": memory,
             })
-        log(f"🧠 Story Context {i}/{len(batches)} updated")
+        log(f"🧠 MiMo Story Context {i}/{len(batches)} updated")
     return memory
 
 
@@ -1534,6 +1642,8 @@ def translate_batch(
     log: LogFn,
     _split_depth: int = 0,
     source_language: str = "English",
+    mimo_api_key: str = "",
+    mimo_model: str = "mimo-v2.6-flash",
 ) -> list[dict[str, Any]]:
     task_rules = """
 You are a CONTEXT-AWARE BURMESE NARRATION TRANSLATOR.
@@ -1598,59 +1708,15 @@ CRITICAL OUTPUT ID PROTOCOL:
             payload = _gemini_json(
                 ai, prompt, retries=1, log=log, response_schema=_TRANSLATION_RESPONSE_SCHEMA
             )
-            translated = _validate_translation_items(current, payload, log=log)
-            name_issues = _character_name_issues(current, translated, list(story_context.get("name_glossary") or []))
-            if name_issues:
-                raise ValueError("Canonical character/place names are inconsistent: " + "; ".join(name_issues[:10]))
-            _assert_no_adjacent_translation_duplicates(translated, previous_context)
-            stray = [f"ID {int(x['id']):05d}: {' '.join(_foreign_letters(x['translation']))}"
-                     for x in translated if _foreign_letters(x["translation"])]
-            if stray:
-                raise ValueError("letters of another script inside the Burmese (" + "; ".join(stray) +
-                                 "); write every word in Burmese script. Invalid characters are never stripped because that can corrupt a Burmese word.")
-            english = [f"ID {int(x['id']):05d}: {', '.join(_latin_words(x['translation']))}"
-                       for x in translated if _latin_words(x["translation"])]
-            notes = [f"ID {int(x['id']):05d}" for x in translated if _note_text(x["translation"])]
-            repeats = find_repeated_next_lines(translated, previous_context)
-            twice = find_near_duplicates(translated, previous_context)
-            slid = _slid_runs(translated, next_context[0].get("source_text") if next_context else None)
-            if (english or notes or repeats or twice or slid) and attempt < 4:
-                problems = []
-                if english:
-                    problems.append("English words inside the Burmese (" + "; ".join(english[:10]) + "): write them "
-                                    "in Burmese script — translate titles and terms, write names by sound")
-                if notes:
-                    problems.append("a note instead of narration (" + ", ".join(notes) + "): write the narration of "
-                                    "that ID's own source words - even when the source is only the end of a sentence, "
-                                    "say those words; never a remark such as '(continuation of the previous sentence)' "
-                                    "and nothing only inside brackets")
-                if repeats:
-                    problems.append("the same words twice (" + ", ".join(f"ID {b:05d} repeats the end of ID {a:05d}"
-                                                                         for a, b in repeats) + "): a sentence split "
-                                    "across two IDs - each ID says only its own source words, never the next ID's")
-                if twice:
-                    problems.append("the same thing said twice (" + ", ".join(f"IDs {a:05d} and {b:05d}" for a, b in twice)
-                                    + " say much the same): each ID says only its own source line")
-                if slid:
-                    problems.append("lines slid one ID early (" + ", ".join(f"IDs {a:05d}-{b:05d}" for a, b in slid)
-                                    + " each say the NEXT ID's source words): every ID translates its own source line")
-                raise ValueError("; ".join(problems))
-            if english:
-                raise ValueError("English/Latin words remain after 4 translation attempts; refusing to save a line that the Myanmar TTS voice may not pronounce: " + "; ".join(english[:10]))
-            if notes or repeats or twice or slid:
-                unresolved = []
-                if notes:
-                    unresolved.append("non-narration/empty Burmese lines: " + ", ".join(notes[:10]))
-                if repeats:
-                    unresolved.append("adjacent ID repetition: " + ", ".join(f"{a:05d}/{b:05d}" for a, b in repeats[:10]))
-                if twice:
-                    unresolved.append("near-duplicate translations: " + ", ".join(f"{a:05d}/{b:05d}" for a, b in twice[:10]))
-                if slid:
-                    unresolved.append("possible one-ID-early alignment drift: " + ", ".join(f"{a:05d}-{b:05d}" for a, b in slid[:10]))
-                raise ValueError("Translation quality checks still failed after 4 attempts; refusing to checkpoint: " + "; ".join(unresolved))
+            translated = _validate_translation_candidate(
+                current, payload, story_context=story_context,
+                previous_context=previous_context, next_context=next_context, log=log,
+            )
             return translated
-        except GeminiKeyPoolExhaustedError:
-            raise
+        except GeminiKeyPoolExhaustedError as exc:
+            last = exc
+            log(f"⚠️ Gemini fallback chain exhausted for this batch; trying MiMo fallback: {exc}")
+            break
         except Exception as exc:
             last = exc
             log(f"⚠️ Translation validation attempt {attempt}/4 failed: {exc}")
@@ -1661,6 +1727,28 @@ CRITICAL OUTPUT ID PROTOCOL:
                 f"The exact items[].id sequence MUST be {json.dumps(exact_ids, ensure_ascii=False)}. "
                 "Do not omit the final ID, renumber rows, or merge adjacent IDs."
             )
+
+    if mimo_api_key:
+        fallback_prompt = prompt + """
+GEMINI HAS FAILED. You are now the backup translator for this batch.
+Follow every original translation rule above. Use the supplied MiMo-generated Story Context
+and canonical Burmese name glossary as authoritative. Return JSON only with the exact IDs.
+"""
+        for fallback_attempt in range(1, 3):
+            try:
+                log(f"🛟 MiMo translation fallback attempt {fallback_attempt}/2 for IDs "
+                    f"{int(current[0]['id']):05d}-{int(current[-1]['id']):05d}")
+                fallback_payload = _mimo_chat_json(
+                    mimo_api_key, fallback_prompt, model=mimo_model
+                )
+                return _validate_translation_candidate(
+                    current, fallback_payload, story_context=story_context,
+                    previous_context=previous_context, next_context=next_context, log=log,
+                )
+            except Exception as fallback_exc:
+                last = fallback_exc
+                log(f"⚠️ MiMo translation fallback {fallback_attempt}/2 failed: {fallback_exc}")
+                fallback_prompt += f"\\n\\nCORRECTION REQUIRED: {fallback_exc}. Return the entire batch again."
 
     # V26 translation-ID resilience: V23's short local-sync segmentation creates many
     # more IDs per long video.  Some Gemini responses occasionally omit the last row
@@ -1691,6 +1779,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
+            mimo_api_key=mimo_api_key, mimo_model=mimo_model,
         )
         right_prev = (list(previous_context or []) + translated_left)[-context_limit:]
         translated_right = translate_batch(
@@ -2117,6 +2206,7 @@ class RecapPlanBuilder:
             load_dotenv(env_file, override=True)
             self.log(f"🔑 Gemini .env loaded: {env_file}")
             env_values = dotenv_values(env_file)
+            mimo_api_key = str(env_values.get("MIMO_API_KEY") or os.getenv("MIMO_API_KEY") or "").strip()
             seen_keys: set[str] = set()
             # Every GEMINI_IMAGE_PROJECT_<N>_KEY in numeric order, else GEMINI_API_KEY.
             numbers = sorted(
@@ -2132,10 +2222,14 @@ class RecapPlanBuilder:
                 key = str(env_values.get("GEMINI_API_KEY") or "").strip()
                 if key:
                     key_pool.append(("GEMINI_API_KEY", key))
+        if not env_file or not env_file.is_file():
+            mimo_api_key = str(os.getenv("MIMO_API_KEY") or "").strip()
         if not key_pool:
             inherited_key = str(os.getenv("GEMINI_API_KEY") or "").strip()
             if inherited_key:
                 key_pool.append(("GEMINI_API_KEY", inherited_key))
+        mimo_model = str((env_values.get("MIMO_STORY_CONTEXT_MODEL") if env_file and env_file.is_file() else "") or os.getenv("MIMO_STORY_CONTEXT_MODEL") or "mimo-v2.6-pro").strip()
+        mimo_fallback_model = str((env_values.get("MIMO_TRANSLATION_FALLBACK_MODEL") if env_file and env_file.is_file() else "") or os.getenv("MIMO_TRANSLATION_FALLBACK_MODEL") or "mimo-v2.6-flash").strip()
         if not key_pool:
             raise RuntimeError(
                 "Gemini API key မတွေ့ပါ။ .env ထဲမှာ GEMINI_API_KEY=... "
@@ -2246,8 +2340,8 @@ class RecapPlanBuilder:
             )
 
             self.progress(1, 4, "Story context memory")
-            self.log("🧠 [2/4] Gemini Story Context Memory pass...")
-            context_source_fp = fp + "|seg:" + segmentation_profile
+            self.log(f"🧠 [2/4] MiMo Story Context pass — model={mimo_model}...")
+            context_source_fp = fp + "|seg:" + segmentation_profile + "|mimo:" + mimo_model
             story_context = build_story_context(
                 ai, units,
                 batch_max_items=self.story_context_batch_max_items,
@@ -2256,6 +2350,9 @@ class RecapPlanBuilder:
                 checkpoint_path=context_checkpoint_file,
                 source_fingerprint=context_source_fp,
                 reuse=reuse,
+                mimo_api_key=mimo_api_key,
+                mimo_model=mimo_model,
+                source_language=language_name,
             )
             _atomic_json(context_file, {
                 "planner_mode": PLANNER_MODE,
@@ -2263,6 +2360,7 @@ class RecapPlanBuilder:
                 "context": story_context,
             })
 
+            self.log("📚 Gemini receives the complete MiMo Story Context and canonical name glossary in every translation batch.")
             self.progress(2, 4, "Timestamp translation")
             self.log(f"🌐 [3/4] Gemini {language_name} → Myanmar translation — narrator source | V2 Smart Sync | no summary / no shortening...")
             batches = _batch_by_size(units, max_items=self.translation_batch_max_items, max_chars=16000)
@@ -2361,6 +2459,7 @@ class RecapPlanBuilder:
                         next_context=nxt,
                         log=self.log,
                         source_language=language_name,
+                        mimo_api_key=mimo_api_key, mimo_model=mimo_fallback_model,
                     )
                 except GeminiKeyPoolExhaustedError as exc:
                     saved = len(translated_all)
@@ -2389,6 +2488,7 @@ class RecapPlanBuilder:
                         ai, story_context=story_context, previous_context=prev,
                         current=english_rows, next_context=nxt, log=self.log,
                         source_language=language_name,
+                        mimo_api_key=mimo_api_key, mimo_model=mimo_fallback_model,
                     )
                     repaired_by_id = {int(row["id"]): row for row in repaired_rows}
                     translated = [repaired_by_id.get(int(row["id"]), row) for row in translated]

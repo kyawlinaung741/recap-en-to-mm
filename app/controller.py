@@ -1088,16 +1088,16 @@ class App(tk.Tk):
     def _browse_env(self) -> None:
         current = self.gemini_env.get().strip()
         initial = str(Path(current).parent) if current else str(ROOT_DIR.parent)
-        p = filedialog.askopenfilename(title="Select .env containing Gemini and MiMo API settings", initialdir=initial, filetypes=[("ENV", ".env"), ("All", "*.*")])
+        p = filedialog.askopenfilename(title="Select .env containing Gemini and GLM API settings", initialdir=initial, filetypes=[("ENV", ".env"), ("All", "*.*")])
         if p:
             self.gemini_env.set(p)
 
     def _manage_gemini_keys(self) -> None:
-        """Manage Gemini keys and MiMo credentials/models in separate UI sections."""
+        """Manage Gemini keys and GLM credentials/models in separate UI sections."""
         env_path = Path(self.gemini_env.get().strip() or (ROOT_DIR / ".env")).expanduser()
         try:
             raw_env = env_path.read_text(encoding="utf-8") if env_path.is_file() else ""
-            # Repair files saved by the previous MiMo-key dialog, which wrote literal "\n" text.
+            # Repair files saved by the previous GLM-key dialog, which wrote literal "\n" text.
             if raw_env and "\n" not in raw_env and r"\n" in raw_env:
                 raw_env = raw_env.replace(r"\n", "\n")
             existing_lines = raw_env.splitlines()
@@ -1107,9 +1107,9 @@ class App(tk.Tk):
 
         # Keep the original single-key setting visible and writable for backward compatibility.
         gemini_key_names = ["GEMINI_API_KEY", *[f"GEMINI_IMAGE_PROJECT_{i}_KEY" for i in range(1, 4)]]
-        mimo_key_names = ["MIMO_API_KEY"]
-        model_names = ["MIMO_STORY_CONTEXT_MODEL", "MIMO_TRANSLATION_FALLBACK_MODEL"]
-        managed_names = set(gemini_key_names + mimo_key_names + model_names)
+        glm_key_names = ["GLM_API_KEY"]
+        model_names = ["GLM_STORY_CONTEXT_MODEL", "GLM_TRANSLATION_FALLBACK_MODEL"]
+        managed_names = set(gemini_key_names + glm_key_names + model_names + ["MIMO_API_KEY", "MIMO_STORY_CONTEXT_MODEL", "MIMO_TRANSLATION_FALLBACK_MODEL", "MIMO_PROXY"])
         current: dict[str, str] = {}
         for line in existing_lines:
             stripped = line.strip()
@@ -1147,32 +1147,32 @@ class App(tk.Tk):
 
         ttk.Separator(body, orient="horizontal").grid(
             row=6, column=0, columnspan=2, sticky="ew", pady=(12, 12))
-        ttk.Label(body, text="MiMo — API Key", font=("Segoe UI Semibold", 12)).grid(
+        ttk.Label(body, text="GLM — API Key", font=("Segoe UI Semibold", 12)).grid(
             row=7, column=0, columnspan=2, sticky="w", pady=(0, 4))
-        ttk.Label(body, text="MiMo API Key ကို Gemini Key နဲ့ မရောဘဲ ဒီအကွက်မှာပဲ ထည့်ပါ။",
+        ttk.Label(body, text="GLM API Key ကို Gemini Key နဲ့ မရောဘဲ ဒီအကွက်မှာပဲ ထည့်ပါ။",
                   style="Muted.TLabel", wraplength=540).grid(
             row=8, column=0, columnspan=2, sticky="w", pady=(0, 6))
-        ttk.Label(body, text="MiMo API Key").grid(
+        ttk.Label(body, text="GLM API Key").grid(
             row=9, column=0, sticky="w", padx=(0, 12), pady=4)
-        mimo_key_var = tk.StringVar(value=current.get("MIMO_API_KEY", ""))
-        ttk.Entry(body, textvariable=mimo_key_var, width=62, show="*").grid(
+        glm_key_var = tk.StringVar(value=current.get("GLM_API_KEY", ""))
+        ttk.Entry(body, textvariable=glm_key_var, width=62, show="*").grid(
             row=9, column=1, sticky="ew", pady=4)
 
         ttk.Separator(body, orient="horizontal").grid(
             row=10, column=0, columnspan=2, sticky="ew", pady=(12, 12))
-        ttk.Label(body, text="MiMo — Model Selection", font=("Segoe UI Semibold", 12)).grid(
+        ttk.Label(body, text="GLM — Model Selection", font=("Segoe UI Semibold", 12)).grid(
             row=11, column=0, columnspan=2, sticky="w", pady=(0, 6))
-        model_options = ("mimo-v2.6-pro", "mimo-v2.6-flash", "mimo-v2.6-pro-ultraspeed")
+        model_options = ("glm-4.7-flash", "glm-4.5-flash", "glm-4-flash-250414")
         ttk.Label(body, text="Story Context Model").grid(
             row=12, column=0, sticky="w", padx=(0, 12), pady=4)
         story_model_var = tk.StringVar(
-            value=current.get("MIMO_STORY_CONTEXT_MODEL", "mimo-v2.6-pro") or "mimo-v2.6-pro")
+            value=current.get("GLM_STORY_CONTEXT_MODEL", "glm-4.7-flash") or "glm-4.7-flash")
         ttk.Combobox(body, textvariable=story_model_var, values=model_options, state="readonly", width=38).grid(
             row=12, column=1, sticky="ew", pady=4)
         ttk.Label(body, text="Translation Fallback Model").grid(
             row=13, column=0, sticky="w", padx=(0, 12), pady=4)
         translation_model_var = tk.StringVar(
-            value=current.get("MIMO_TRANSLATION_FALLBACK_MODEL", "mimo-v2.6-flash") or "mimo-v2.6-flash")
+            value=current.get("GLM_TRANSLATION_FALLBACK_MODEL", "glm-4.7-flash") or "glm-4.7-flash")
         ttk.Combobox(body, textvariable=translation_model_var, values=model_options, state="readonly", width=38).grid(
             row=13, column=1, sticky="ew", pady=4)
 
@@ -1184,9 +1184,9 @@ class App(tk.Tk):
         def save_keys() -> None:
             values = {
                 **{name: variable.get().strip() for name, variable in zip(gemini_key_names, gemini_vars)},
-                "MIMO_API_KEY": mimo_key_var.get().strip(),
-                "MIMO_STORY_CONTEXT_MODEL": story_model_var.get().strip() or "mimo-v2.6-pro",
-                "MIMO_TRANSLATION_FALLBACK_MODEL": translation_model_var.get().strip() or "mimo-v2.6-flash",
+                "GLM_API_KEY": glm_key_var.get().strip(),
+                "GLM_STORY_CONTEXT_MODEL": story_model_var.get().strip() or "glm-4.7-flash",
+                "GLM_TRANSLATION_FALLBACK_MODEL": translation_model_var.get().strip() or "glm-4.7-flash",
             }
             preserved = []
             for line in existing_lines:
@@ -1212,9 +1212,9 @@ class App(tk.Tk):
             messagebox.showinfo(
                 "API Keys & Models",
                 f"Gemini Key {sum(bool(variable.get().strip()) for variable in gemini_vars)} ခု၊ "
-                f"MiMo Key {'ထည့်ပြီး' if values['MIMO_API_KEY'] else 'မထည့်ထား'}။\\n"
-                f"Story Context: {values['MIMO_STORY_CONTEXT_MODEL']}\\n"
-                f"Translation Fallback: {values['MIMO_TRANSLATION_FALLBACK_MODEL']}\\n"
+                f"GLM Key {'ထည့်ပြီး' if values['GLM_API_KEY'] else 'မထည့်ထား'}။\\n"
+                f"Story Context: {values['GLM_STORY_CONTEXT_MODEL']}\\n"
+                f"Translation Fallback: {values['GLM_TRANSLATION_FALLBACK_MODEL']}\\n"
                 "နောက်တစ်ကြိမ် START / RESUME မှာ အသုံးပြုပါမယ်။",
                 parent=self,
             )

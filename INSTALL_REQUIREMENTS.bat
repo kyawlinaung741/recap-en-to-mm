@@ -31,23 +31,6 @@ if errorlevel 1 goto :ffmpeg_fail
 echo.
 echo [5/5] Installing Ollama and downloading Qwen3:4b...
 call :setup_ollama
-if errorlevel 1 goto :ollama_fail
-
-echo.
-echo ================================================================
-echo  INSTALLATION COMPLETE
-echo ================================================================
-echo Python requirements, Chromium, FFmpeg, Ollama, and qwen3:4b
-echo are ready.
-echo.
-echo Ollama translates locally. Gemini is still used for Story Context and Translation Audit.
-echo Put your Gemini key in .env (copy .env.example), then run RUN.bat.
-echo Ollama model: qwen3:4b
-echo.
-pause
-exit /b 0
-
-:setup_ollama
 set "OLLAMA_EXE="
 where ollama.exe >nul 2>nul
 if not errorlevel 1 (
@@ -59,30 +42,23 @@ if not defined OLLAMA_EXE if exist "%ProgramFiles%\Ollama\ollama.exe" set "OLLAM
 
 if defined OLLAMA_EXE goto :ollama_found
 
-echo Ollama was not found. Trying installation with Windows winget...
-where winget.exe >nul 2>nul
+echo Ollama was not found. Installing automatically from the official Ollama installer...
+echo This may download a large Windows package. Please wait; no manual setup is needed.
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { irm https://ollama.com/install.ps1 | iex; exit 0 } catch { Write-Error $_; exit 1 }"
 if errorlevel 1 (
-    echo winget is unavailable. Please install Ollama from https://ollama.com/download
-    echo Then close and reopen this window and run INSTALL_REQUIREMENTS.bat again.
+    echo Official Ollama installation failed.
     exit /b 1
 )
 
-winget install --id Ollama.Ollama --exact --accept-package-agreements --accept-source-agreements
-if errorlevel 1 (
-    echo Ollama installation through winget failed.
-    echo Install it manually from https://ollama.com/download and rerun this installer.
-    exit /b 1
-)
-
-rem Refresh PATH for this installer process after winget installation.
+rem The official installer updates the current PowerShell PATH only.
+rem Resolve the executable directly for this batch process.
 if exist "%LOCALAPPDATA%\Programs\Ollama\ollama.exe" set "OLLAMA_EXE=%LOCALAPPDATA%\Programs\Ollama\ollama.exe"
 if not defined OLLAMA_EXE if exist "%ProgramFiles%\Ollama\ollama.exe" set "OLLAMA_EXE=%ProgramFiles%\Ollama\ollama.exe"
 if not defined OLLAMA_EXE (
     for /f "delims=" %%I in ('where ollama.exe 2^>nul') do if not defined OLLAMA_EXE set "OLLAMA_EXE=%%I"
 )
 if not defined OLLAMA_EXE (
-    echo Ollama was installed, but ollama.exe was not found in the usual locations.
-    echo Restart Windows or install Ollama manually, then rerun this installer.
+    echo Ollama installer finished, but ollama.exe could not be located.
     exit /b 1
 )
 

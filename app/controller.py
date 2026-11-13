@@ -1154,7 +1154,7 @@ class App(tk.Tk):
         ttk.Label(body, text="Azure Foundry Resource API Key နဲ့ Endpoint ကို ထည့်ပါ။ Deployment name က Foundry ထဲမှာ သင်သတ်မှတ်ထားတဲ့ နာမည်ဖြစ်ပါတယ်။",
                   style="Muted.TLabel", wraplength=540).grid(
             row=7, column=0, columnspan=2, sticky="w", pady=(0, 6))
-        ttk.Label(body, text="Azure API Key").grid(row=17, column=0, sticky="w", padx=(0, 12), pady=4)
+        ttk.Label(body, text="Azure API Key").grid(row=8, column=0, sticky="w", padx=(0, 12), pady=4)
         azure_key_var = tk.StringVar(value=current.get("AZURE_AI_FOUNDRY_API_KEY", ""))
         ttk.Entry(body, textvariable=azure_key_var, width=62, show="*").grid(row=8, column=1, sticky="ew", pady=4)
         ttk.Label(body, text="Endpoint URL").grid(row=9, column=0, sticky="w", padx=(0, 12), pady=4)
@@ -1163,7 +1163,7 @@ class App(tk.Tk):
         ttk.Label(body, text="Story Context Deployment").grid(row=10, column=0, sticky="w", padx=(0, 12), pady=4)
         azure_story_var = tk.StringVar(value=current.get("AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT", ""))
         ttk.Entry(body, textvariable=azure_story_var, width=38).grid(row=10, column=1, sticky="ew", pady=4)
-        ttk.Label(body, text="Translation Deployment").grid(row=20, column=0, sticky="w", padx=(0, 12), pady=4)
+        ttk.Label(body, text="Translation Deployment").grid(row=11, column=0, sticky="w", padx=(0, 12), pady=4)
         azure_translation_var = tk.StringVar(value=current.get("AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT", ""))
         ttk.Entry(body, textvariable=azure_translation_var, width=38).grid(row=11, column=1, sticky="ew", pady=4)
         ttk.Label(body, text="Azure credentials မပြည့်စုံပါက Gemini ကို fallback အဖြစ် အသုံးပြုပါမယ်။",

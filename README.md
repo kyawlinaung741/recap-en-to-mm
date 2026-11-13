@@ -1,7 +1,7 @@
 # Recap → Myanmar (+ Splitter)
 
 **English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … ဘာသာစကားမျိုးစုံနဲ့ ပြောထားတဲ့ ဇာတ်လမ်း/Recap video ကို မြန်မာ Narrator အသံနဲ့ ပြန်လည်တင်ဆက်ပေးတဲ့ Windows tool**
-Myanmar story narration · Whisper + Gemini translation · Edge TTS / Gemini TTS · Smart Sync
+Myanmar story narration · Whisper + MiMo Story Context + Gemini-led translation (MiMo fallback) · Edge TTS / Gemini TTS · Smart Sync
 **Splitter** tab — ရှည်တဲ့ video ကို မိနစ်အလိုက် အပိုင်းခွဲ (Ratio + blur နောက်ခံ၊ စာ၊ Part နံပါတ်)
 
  > English: turns a story/recap video into natural Burmese narrator-style storytelling. Gemini preserves the plot,
@@ -18,8 +18,8 @@ Myanmar story narration · Whisper + Gemini translation · Edge TTS / Gemini TTS
    - English ဆို `small.en` (~460 MB)၊ တခြားဘာသာဆို `medium` (~1.5 GB, multilingual) နဲ့ နားထောင်တယ်။ Model တွေကို ပထမဆုံးအကြိမ်ပဲ download လုပ်ရတယ်။
    - ဟိန္ဒီနဲ့ Urdu က အသံတူလို့ Auto-detect မှာ Urdu ထွက်ရင် ဟိန္ဒီအဖြစ် ရေးတယ်။
 2. **အပိုင်းခွဲ** — စာကြောင်း၊ သဘာဝကျတဲ့ စကားစုနဲ့ အသံရပ်တဲ့နေရာတွေကို အခြေခံပြီး sync unit ခွဲတယ်။ စာကြောင်းရှည်ရင် အသက်ရှူရပ်နားလို့ သင့်တဲ့ နေရာမှာ ခွဲပေးတယ်။
-3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Gemini က ဇာတ်လမ်းတစ်ခုလုံးကို အရင်ဖတ်ပြီး မူရင်းနာမည် → မြန်မာအသံထွက်ဆိုတဲ့ Canonical Name Glossary တစ်ခု တည်ဆောက်တယ်။ ဘာသာပြန် batch အားလုံးက အဲဒီနာမည်စာရင်းတစ်ခုတည်းကို မဖြစ်မနေ သုံးတယ်။
-4. **ဘာသာပြန်** — Gemini က တစ်ခါမှာ အပိုင်း ၄၀ အထိ မြန်မာ Narrator ပုံစံနဲ့ ပြန်တယ်။
+3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — MiMo က Whisper transcript တစ်ကားလုံးကို အပိုင်းလိုက်ဖတ်ပြီး ဇာတ်ကောင်၊ ဆက်နွယ်မှု၊ မူရင်းနာမည်၊ တရုတ် Pinyin၊ မြန်မာအသံထွက် Canonical Name Glossary နဲ့ ဇာတ်လမ်းနောက်ခံကို တည်ဆောက်တယ်။
+4. **ဘာသာပြန်** — Gemini က MiMo ရဲ့ Story Context Memory ကို batch တိုင်းမှာ ကိုးကားပြီး စကားပြောခန်းအားလုံးကို မြန်မာ Narrator ပုံစံနဲ့ ဦးဆောင်ဘာသာပြန်တယ်။ Gemini model/key fallback အားလုံး မအောင်မြင်တဲ့အခါ MiMo ကို translation fallback အဖြစ် သုံးတယ်။
    - မူရင်းဇာတ်လမ်းရဲ့ အချက်အလက်၊ အစဉ်လိုက်ဖြစ်စဉ်၊ ဇာတ်ကောင်နာမည်နဲ့ ဆက်နွယ်မှုတွေကို ထိန်းထားပြီး သဘာဝကျတဲ့ မြန်မာဇာတ်ကြောင်းပြောပုံစံ သုံးတယ်။ Direct Dub ပုံစံ မဟုတ်ဘူး။
    - A/B/C/S အဆင့်သတ်မှတ်ချက်တွေကို subtitle စာသားမှာ မူရင်းအတိုင်း ထိန်းပြီး Narrator ဖတ်တဲ့အခါမှ အေ/ဘီ/စီ/အက်စ် အဆင့်လို့ အသံထွက်ပြောင်းပေးတယ်။
    - နံပါတ်နဲ့ ရာခိုင်နှုန်းတွေကို မြန်မာစကားပြောပုံစံအဖြစ် ပြောင်းပြီး `%` ကို ရာခိုင်နှုန်း၊ `&` ကို နှင့် လို့ ပြောင်းပေးတယ်။
@@ -291,8 +291,7 @@ The final output uses the generated Myanmar narration track; the original source
 
 ### Requirements
 Windows 10/11 64-bit · Python 3.12 64-bit (with tcl/tk, on PATH) · FFmpeg (`ffmpeg.exe` +
-`ffprobe.exe` on PATH, in `C:\ffmpeg\bin`, or in a folder named `ffmpeg` here) · a free Gemini API
-key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) · internet. An NVIDIA GPU is
+`ffprobe.exe` on PATH, in `C:\ffmpeg\bin`, or in a folder named `ffmpeg` here) · a Gemini API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) · a Xiaomi MiMo API key (required for Story Context) · internet. An NVIDIA GPU is
 optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself).
 
 ### Install
@@ -300,7 +299,7 @@ optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself)
 2. Run **`INSTALL_REQUIREMENTS.bat`** (pip packages, Chromium for the Myanmar title renderer, and
    FFmpeg: when it is not on PATH or in `C:\ffmpeg\bin`, about 100 MB is downloaded into `ffmpeg\`).
    `[WinError 2] The system cannot find the file specified` means FFmpeg is missing — run it again.
-3. Copy **`.env.example`** to **`.env`** and set `GEMINI_API_KEY=`. More keys
+3. Copy **`.env.example`** to **`.env`** and set both `GEMINI_API_KEY=` and `MIMO_API_KEY=`. MiMo Story Context uses `mimo-v2.6-pro` by default; Gemini leads translation, and `mimo-v2.6-flash` is the translation fallback. You can change them with `MIMO_STORY_CONTEXT_MODEL` and `MIMO_TRANSLATION_FALLBACK_MODEL`. More keys
    (`GEMINI_IMAGE_PROJECT_1_KEY`, `GEMINI_IMAGE_PROJECT_2_KEY`, …) are used in turn when one is used
    up; after all keys the next model is tried
    (`gemini-3.5-flash → 3.5-flash-lite → 3.6-flash → 3.7-flash → 3.1-flash-lite`).

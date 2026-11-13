@@ -2422,7 +2422,7 @@ class RecapPlanBuilder:
 
             self.log("📚 Translation provider receives the complete Story Context memory and canonical Burmese name glossary in every batch.")
             self.progress(2, 4, "Timestamp translation")
-            self.log(f"🌐 [3/4] Azure AI Foundry {language_name} → Myanmar translation primary; Gemini and GLM fallback — narrator source | no summary / no shortening...")
+            self.log(f"🌐 [3/4] Azure AI Foundry {language_name} → Myanmar translation primary; Gemini fallback — narrator source | no summary / no shortening...")
             batches = _batch_by_size(units, max_items=self.translation_batch_max_items, max_chars=16000)
             translated_all: list[dict[str, Any]] = []
             if reuse and translations_file.is_file():

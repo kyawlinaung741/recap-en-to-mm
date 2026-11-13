@@ -2159,6 +2159,9 @@ class RecapPlanBuilder:
             source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}|translation:{self.translation_engine}")
         gemini_transcript_fp = _source_fingerprint_for_mode(
             source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}|translation:gemini")
+        legacy_current_transcript_fp = _source_fingerprint_for_mode(
+            source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}")
+        context_fp = legacy_current_transcript_fp
         # Keep existing local Whisper transcripts when upgrading the text-provider pipeline.
         legacy_transcript_fp = _source_fingerprint_for_mode(
             source, "timestamp_translation_en_to_mm_narrator_v4_glm_story_context|" + direction
@@ -2246,7 +2249,7 @@ class RecapPlanBuilder:
         if reuse and transcript_file.is_file() and state_file.is_file():
             try:
                 state = json.loads(state_file.read_text(encoding="utf-8"))
-                if state.get("source_fingerprint") in {fp, gemini_transcript_fp, legacy_transcript_fp, previous_provider_transcript_fp} and state.get("transcript_ready") is True:
+                if state.get("source_fingerprint") in {fp, gemini_transcript_fp, legacy_current_transcript_fp, legacy_transcript_fp, previous_provider_transcript_fp} and state.get("transcript_ready") is True:
                     candidate = json.loads(transcript_file.read_text(encoding="utf-8"))
                     if (
                         candidate.get("backend") in {"faster-whisper", "openai-whisper"}
@@ -2344,7 +2347,7 @@ class RecapPlanBuilder:
 
             self.progress(1, 4, "Story context memory")
             self.log(f"🧠 [2/4] Story Context — Gemini ({self.gemini_text_model})...")
-            context_source_fp = fp + "|seg:" + segmentation_profile + "|gemini:" + str(self.gemini_text_model)
+            context_source_fp = context_fp + "|seg:" + segmentation_profile + "|gemini:" + str(self.gemini_text_model)
             story_context = build_story_context(
                 ai, units,
                 batch_max_items=self.story_context_batch_max_items,

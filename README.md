@@ -309,10 +309,7 @@ videos into parts.
 The output has only the Myanmar voice (no original audio or music).
 
 ### Requirements
-Windows 10/11 64-bit · Python 3.12 64-bit (with tcl/tk, on PATH) · FFmpeg (`ffmpeg.exe` +
-`ffprobe.exe` on PATH, in `C:\ffmpeg\bin`, or in a folder named `ffmpeg` here) · a free Gemini API
-key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) · internet. An NVIDIA GPU is
-optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself).
+Windows 10/11 64-bit · Python 3.12 64-bit · FFmpeg · Ollama with Qwen3:4b (installed by setup) · a free Gemini API key for Story Context and Translation Audit · internet. An NVIDIA GPU is optional; Ollama and Whisper can use the available CPU/GPU.
 
 ### Install
 1. Download the repo (Code → Download ZIP) and unzip it.

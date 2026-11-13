@@ -1106,6 +1106,17 @@ def _extract_json_payload(raw_text: str) -> Any:
 _STORY_CONTEXT_RESPONSE_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
+        "name_glossary": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "source_name": {"type": "STRING"},
+                    "burmese_name": {"type": "STRING"},
+                },
+                "required": ["source_name", "burmese_name"],
+            },
+        },
         # Gemini structured output requires an explicit item schema for every array.
         # These memory collections are plain text and are carried forward as context.
         "characters": {"type": "ARRAY", "items": {"type": "STRING"}},
@@ -1118,7 +1129,7 @@ _STORY_CONTEXT_RESPONSE_SCHEMA: dict[str, Any] = {
     },
     "required": [
         "characters", "relationships", "places", "terms",
-        "plot_state", "name_consistency", "unresolved",
+        "plot_state", "name_consistency", "name_glossary", "unresolved",
     ],
 }
 
@@ -1270,6 +1281,82 @@ def _load_runtime_config(runtime_root: Path) -> dict[str, Any]:
         return {}
 
 
+def _name_key(value: Any) -> str:
+    return re.sub(r"\s+", " ", _clean(value)).casefold()
+
+
+def _merge_name_glossary(
+    existing: list[dict[str, str]],
+    incoming: Any,
+    legacy_entries: Any = None,
+    log: LogFn | None = None,
+) -> list[dict[str, str]]:
+    """Keep the first canonical Burmese spelling for each exact source-name spelling."""
+    merged: dict[str, dict[str, str]] = {}
+    for row in existing or []:
+        if not isinstance(row, dict):
+            continue
+        source_name = _clean(row.get("source_name"))
+        burmese_name = _clean(row.get("burmese_name"))
+        if source_name and burmese_name:
+            merged.setdefault(_name_key(source_name), {
+                "source_name": source_name, "burmese_name": burmese_name,
+            })
+
+    # Migrate older Story Context entries such as "Christopher → ခရစ်စတိုဖာ".
+    legacy = legacy_entries if isinstance(legacy_entries, list) else []
+    candidates = list(legacy)
+    if isinstance(incoming, list):
+        candidates.extend(incoming)
+    for row in candidates:
+        if isinstance(row, dict):
+            source_name = _clean(row.get("source_name"))
+            burmese_name = _clean(row.get("burmese_name"))
+        elif isinstance(row, str):
+            match = re.match(r"^\s*(.{2,80}?)\s*(?:→|=>|->|＝>|：|:)\s*(.{2,80}?)\s*$", row)
+            if not match:
+                continue
+            source_name, burmese_name = _clean(match.group(1)), _clean(match.group(2))
+        else:
+            continue
+        if not source_name or not burmese_name:
+            continue
+        key = _name_key(source_name)
+        if key in merged:
+            if merged[key]["burmese_name"] != burmese_name and log:
+                log(f"⚠️ Name glossary conflict for {source_name}: keeping {merged[key]['burmese_name']} (new suggestion: {burmese_name})")
+            continue
+        merged[key] = {"source_name": source_name, "burmese_name": burmese_name}
+    return list(merged.values())
+
+
+def _character_name_issues(
+    source_rows: list[dict[str, Any]],
+    translated_rows: list[dict[str, Any]],
+    glossary: list[dict[str, str]],
+) -> list[str]:
+    """Fail closed when a source row names a known character but output omits its canonical Burmese name."""
+    by_id = {int(row["id"]): row for row in translated_rows}
+    issues: list[str] = []
+    for source in source_rows:
+        uid = int(source["id"])
+        source_text = _clean(source.get("source_text"))
+        output = _clean((by_id.get(uid) or {}).get("translation"))
+        for entry in glossary:
+            source_name = _clean(entry.get("source_name"))
+            burmese_name = _clean(entry.get("burmese_name"))
+            if len(source_name) < 2 or not burmese_name:
+                continue
+            if re.search(r"[A-Za-z]", source_name):
+                pattern = r"(?<![A-Za-z0-9])" + re.escape(source_name) + r"(?![A-Za-z0-9])"
+                mentioned = re.search(pattern, source_text, flags=re.IGNORECASE) is not None
+            else:
+                mentioned = source_name.casefold() in source_text.casefold()
+            if mentioned and burmese_name not in output:
+                issues.append(f"ID {uid:05d}: {source_name} must be written as {burmese_name}")
+    return issues
+
+
 def build_story_context(
     ai: Any,
     units: list[dict[str, Any]],
@@ -1285,7 +1372,7 @@ def build_story_context(
     batches = _batch_by_size(units, max_items=batch_max_items, max_chars=24000)
     memory: dict[str, Any] = {
         "characters": [], "relationships": [], "places": [], "terms": [],
-        "plot_state": [], "name_consistency": [], "unresolved": []
+        "plot_state": [], "name_consistency": [], "name_glossary": [], "unresolved": []
     }
     completed = 0
     if reuse and checkpoint_path and checkpoint_path.is_file():
@@ -1317,7 +1404,9 @@ and the current story state consistent when later translation requests are sent 
 RULES:
 - Preserve exact character/place/object names as they appear in the source when known.
 - Keep important relationships, aliases, roles, reveals, and terminology.
-- For each recurring proper name, record its exact source spelling and one Burmese phonetic rendering in name_consistency; keep that rendering stable in all later chunks.
+- For every recurring person, place, organization, skill, or named object, add a name_glossary object with exact source_name and ONE Burmese-script burmese_name.
+- name_glossary is the canonical dictionary for the ENTIRE movie, not just this chunk. Never change an existing spelling for the same source_name; add new names only. If a later chunk explicitly proves an earlier identity/name was wrong, record the correction in unresolved rather than silently changing the canonical spelling.
+- Also keep name_consistency as concise human-readable notes, but name_glossary is authoritative.
 - Keep plot_state chronological but compact. Do not invent anything.
 - If an earlier assumption is corrected by this chunk, update it.
 Return the context memory in the structured format specified by the response schema. Keep it concise enough to reuse in every later request.
@@ -1347,7 +1436,15 @@ SOURCE CHUNK {i}/{len(batches)}:
             "places": list(data.get("places") or []),
             "terms": list(data.get("terms") or []),
             "plot_state": list(data.get("plot_state") or []),
-            "name_consistency": list(data.get("name_consistency") or []),
+            "name_consistency": list(dict.fromkeys(
+                list(memory.get("name_consistency") or []) + list(data.get("name_consistency") or [])
+            )),
+            "name_glossary": _merge_name_glossary(
+                list(memory.get("name_glossary") or []),
+                data.get("name_glossary"),
+                legacy_entries=memory.get("name_consistency") or [],
+                log=log,
+            ),
             "unresolved": list(data.get("unresolved") or []),
         }
         if checkpoint_path:
@@ -1437,7 +1534,7 @@ NATIVE BURMESE NARRATOR STYLE:
 - Avoid stiff word-for-word translation; restructure wording and clause order INSIDE THE SAME ID when needed.
 - Keep Burmese pronouns, kinship terms, honorifics, gendered self-reference, names, and relationships contextually correct.
 - Keep dialogue intent and social register natural without turning ordinary speech into formal literary Burmese.
-- Build a stable phonetic name dictionary from STORY CONTEXT MEMORY: map each original person/place/skill name to one Burmese-script pronunciation and reuse it consistently in every ID. Example: Christopher → ခရစ်စတိုဖာ. Do not translate a proper name by meaning or invent a different spelling later.
+- The NAME GLOSSARY in STORY CONTEXT MEMORY is mandatory and authoritative. Whenever a source_name appears in the current source text, write its exact mapped burmese_name. Never improvise, translate by meaning, shorten, or respell a listed name. The same character must have exactly the same Burmese name in every batch of the entire movie.
 - Convert quantities and years into natural spoken Burmese words when practical; write percentages as a spoken number followed by ရာခိုင်နှုန်း, and replace & with နှင့်. Never omit a number, level, date, or amount.
 - Prefer short, breath-friendly narrator clauses and natural pauses at sentence boundaries; do not add filler or stretch the narration.
 - Write letter grades/ranks in their Burmese spoken form so TTS reads the complete grade: A အဆင့် → အေ အဆင့်, B အဆင့် → ဘီ အဆင့်, C အဆင့် → စီ အဆင့်, S အဆင့် → အက်စ် အဆင့်. Apply this only when the letter is a grade/rank label, not an unrelated name or abbreviation.
@@ -1463,6 +1560,9 @@ HARD RULES:
 STORY CONTEXT MEMORY:
 {json.dumps(story_context, ensure_ascii=False)}
 
+MANDATORY CANONICAL NAME GLOSSARY (apply exactly; do not invent alternate spellings):
+{json.dumps(story_context.get("name_glossary") or [], ensure_ascii=False)}
+
 PREVIOUS CONTEXT (READ-ONLY):
 {_translation_lines(previous_context) if previous_context else '(none)'}
 
@@ -1486,6 +1586,9 @@ CRITICAL OUTPUT ID PROTOCOL:
                 ai, prompt, retries=1, log=log, response_schema=_TRANSLATION_RESPONSE_SCHEMA
             )
             translated = _validate_translation_items(current, payload, log=log)
+            name_issues = _character_name_issues(current, translated, list(story_context.get("name_glossary") or []))
+            if name_issues:
+                raise ValueError("Canonical character/place names are inconsistent: " + "; ".join(name_issues[:10]))
             _assert_no_adjacent_translation_duplicates(translated, previous_context)
             stray = [f"ID {int(x['id']):05d}: {' '.join(_foreign_letters(x['translation']))}"
                      for x in translated if _foreign_letters(x["translation"])]
@@ -2271,6 +2374,12 @@ class RecapPlanBuilder:
                 ]
                 if remaining_english:
                     raise RuntimeError("English words remain after translation audit; refusing to send incomplete Burmese text to TTS: " + "; ".join(remaining_english[:10]))
+                name_issues = _character_name_issues(batch, translated, list(story_context.get("name_glossary") or []))
+                if name_issues:
+                    raise RuntimeError(
+                        "Canonical name validation failed after translation audit; refusing to save inconsistent names: "
+                        + "; ".join(name_issues[:10])
+                    )
                 foreign_rows = [
                     f"ID {int(row['id']):05d}: {' '.join(_foreign_letters(row.get('translation')))}"
                     for row in translated if _foreign_letters(row.get("translation"))

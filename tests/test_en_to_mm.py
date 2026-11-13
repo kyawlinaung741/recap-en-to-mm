@@ -24,6 +24,21 @@ def _unit(uid: int, start: float, end: float, text: str) -> dict:
 
 
 class OnlyEnglishToMyanmarTests(unittest.TestCase):
+    def test_glm_api_uses_bigmodel_bearer_endpoint_and_json_mode(self):
+        fake_response = mock.Mock()
+        fake_response.status_code = 200
+        fake_response.json.return_value = {
+            "choices": [{"finish_reason": "stop", "message": {"content": '{"ok": true}'}}]
+        }
+        with mock.patch.object(rp.requests, "post", return_value=fake_response) as post:
+            result = rp._glm_chat_json("test-key", "Return JSON", model="glm-4.7-flash")
+        self.assertEqual(result, {"ok": True})
+        args, kwargs = post.call_args
+        self.assertEqual(args[0], "https://open.bigmodel.cn/api/paas/v4/chat/completions")
+        self.assertEqual(kwargs["headers"]["Authorization"], "Bearer test-key")
+        self.assertEqual(kwargs["json"]["model"], "glm-4.7-flash")
+        self.assertEqual(kwargs["json"]["response_format"], {"type": "json_object"})
+
     def test_no_other_language_mode_or_voice_engine_is_left(self):
         for name in ("recap_planner.py", "core.py", "controller.py", "planner_worker.py", "render_worker.py"):
             text = (APP / name).read_text(encoding="utf-8")
@@ -165,33 +180,33 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         self.assertAlmostEqual(slow["applied_factor"], 1.5)
 
 
-    def test_mimo_is_used_after_gemini_fallback_exhaustion_with_same_prompt(self):
+    def test_glm_is_used_after_gemini_fallback_exhaustion_with_same_prompt(self):
         logs = []
         gemini_prompts = []
-        mimo_prompts = []
+        glm_prompts = []
 
         def gemini_failure(_ai, prompt, **_kwargs):
             gemini_prompts.append(prompt)
             raise rp.GeminiKeyPoolExhaustedError("quota exhausted")
 
-        def mimo_answer(_key, prompt, **_kwargs):
-            mimo_prompts.append(prompt)
+        def glm_answer(_key, prompt, **_kwargs):
+            glm_prompts.append(prompt)
             return {"items": [{"id": 1, "translation": "သူ အိမ်ပြန်လာတယ်။"}]}
 
         with mock.patch.object(rp, "_gemini_json", side_effect=gemini_failure):
-            with mock.patch.object(rp, "_mimo_chat_json", side_effect=mimo_answer) as mimo:
+            with mock.patch.object(rp, "_glm_chat_json", side_effect=glm_answer) as glm:
                 out = rp.translate_batch(
                     None, story_context={}, previous_context=[],
                     current=[_unit(1, 0.0, 2.0, "He came home.")],
                     next_context=[], log=logs.append,
-                    mimo_api_key="test-key", mimo_model="mimo-v2.6-flash",
+                    glm_api_key="test-key", glm_model="glm-4.7-flash",
                 )
         self.assertEqual(out[0]["translation"], "သူ အိမ်ပြန်လာတယ်။")
-        mimo.assert_called_once()
-        self.assertEqual(mimo_prompts[0], gemini_prompts[0])
-        self.assertTrue(any("trying MiMo fallback" in line for line in logs))
+        glm.assert_called_once()
+        self.assertEqual(glm_prompts[0], gemini_prompts[0])
+        self.assertTrue(any("trying GLM fallback" in line for line in logs))
 
-    def test_mimo_builds_story_context_and_keeps_chinese_pinyin(self):
+    def test_glm_builds_story_context_and_keeps_chinese_pinyin(self):
         response = {
             "characters": ["陈阳 is the main character"],
             "relationships": ["陈阳 is 林安羽's friend"],
@@ -206,24 +221,24 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as folder:
             checkpoint = Path(folder) / "story_context_checkpoint.json"
-            with mock.patch.object(rp, "_mimo_chat_json", return_value=response) as mimo:
+            with mock.patch.object(rp, "_glm_chat_json", return_value=response) as glm:
                 context = rp.build_story_context(
                     None, [_unit(1, 0.0, 2.0, "陈阳来到红星饭店。")],
                     batch_max_items=10, log=lambda _m: None,
                     should_stop=lambda: False, checkpoint_path=checkpoint,
                     source_fingerprint="test-fingerprint", reuse=False,
-                    mimo_api_key="test-key", mimo_model="mimo-v2.6-pro",
+                    glm_api_key="test-key", glm_model="glm-4.7-flash",
                     source_language="Chinese",
                 )
         self.assertEqual(context["name_glossary"][0]["pinyin"], "Chén Yáng")
         self.assertEqual(context["name_glossary"][0]["burmese_name"], "ချန်ယမ်")
         self.assertTrue(checkpoint.is_file())
-        self.assertEqual(json.loads(checkpoint.read_text(encoding="utf-8"))["version"], 3)
-        mimo.assert_called_once()
+        self.assertEqual(json.loads(checkpoint.read_text(encoding="utf-8"))["version"], 4)
+        glm.assert_called_once()
 
 
 
-    def test_gemini_builds_story_context_when_mimo_fails(self):
+    def test_gemini_builds_story_context_when_glm_fails(self):
         response = {
             "characters": ["陈阳 is the main character"],
             "relationships": [],
@@ -236,12 +251,12 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
             ],
             "unresolved": [],
         }
-        mimo_prompts = []
+        glm_prompts = []
         gemini_prompts = []
 
-        def mimo_failure(_key, prompt, **_kwargs):
-            mimo_prompts.append(prompt)
-            raise RuntimeError("MiMo API unavailable")
+        def glm_failure(_key, prompt, **_kwargs):
+            glm_prompts.append(prompt)
+            raise RuntimeError("GLM API unavailable")
 
         def gemini_answer(_ai, prompt, **_kwargs):
             gemini_prompts.append(prompt)
@@ -250,34 +265,34 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             checkpoint = Path(folder) / "story_context_checkpoint.json"
             with mock.patch.object(rp.time, "sleep"):
-                with mock.patch.object(rp, "_mimo_chat_json", side_effect=mimo_failure):
+                with mock.patch.object(rp, "_glm_chat_json", side_effect=glm_failure):
                     with mock.patch.object(rp, "_gemini_json", side_effect=gemini_answer):
                         context = rp.build_story_context(
                             None, [_unit(1, 0.0, 2.0, "陈阳来到红星饭店。")],
                             batch_max_items=10, log=lambda _m: None,
                             should_stop=lambda: False, checkpoint_path=checkpoint,
                             source_fingerprint="gemini-fallback-test", reuse=False,
-                            mimo_api_key="test-key", mimo_model="mimo-v2.6-pro",
+                            glm_api_key="test-key", glm_model="glm-4.7-flash",
                             source_language="Chinese",
                         )
         self.assertEqual(context["name_glossary"][0]["burmese_name"], "ချန်ယမ်")
-        self.assertEqual(len(mimo_prompts), 3)
+        self.assertEqual(len(glm_prompts), 3)
         self.assertEqual(len(gemini_prompts), 1)
-        self.assertEqual(gemini_prompts[0], mimo_prompts[-1])
+        self.assertEqual(gemini_prompts[0], glm_prompts[-1])
         self.assertTrue(checkpoint.is_file())
 
-    def test_mimo_fallback_also_covers_sentence_lock_audit(self):
+    def test_glm_fallback_also_covers_sentence_lock_audit(self):
         rows = [dict(_unit(1, 0.0, 2.0, "He came home."), translation="သူ အိမ်ပြန်လာတယ်။")]
         with mock.patch.object(rp, "_gemini_json", side_effect=rp.GeminiKeyPoolExhaustedError("quota")):
-            with mock.patch.object(rp, "_mimo_chat_json", return_value={
+            with mock.patch.object(rp, "_glm_chat_json", return_value={
                 "checks": [{"id": 1, "status": "pass"}]
-            }) as mimo:
+            }) as glm:
                 audited = rp.audit_and_repair_batch(
                     None, rows, story_context={}, previous_context=[], next_context=[],
-                    log=lambda _m: None, mimo_api_key="test-key", mimo_model="mimo-v2.6-flash",
+                    log=lambda _m: None, glm_api_key="test-key", glm_model="glm-4.7-flash",
                 )
         self.assertEqual(audited[0]["translation"], "သူ အိမ်ပြန်လာတယ်။")
-        mimo.assert_called_once()
+        glm.assert_called_once()
 
 
 

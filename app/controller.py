@@ -1101,7 +1101,8 @@ class App(tk.Tk):
             messagebox.showerror("API Keys & Models", f".env ဖိုင်ဖတ်မရပါ။\\n{exc}")
             return
 
-        gemini_key_names = [f"GEMINI_IMAGE_PROJECT_{i}_KEY" for i in range(1, 4)]
+        # Keep the original single-key setting visible and writable for backward compatibility.
+        gemini_key_names = ["GEMINI_API_KEY", *[f"GEMINI_IMAGE_PROJECT_{i}_KEY" for i in range(1, 4)]]
         mimo_key_names = ["MIMO_API_KEY"]
         model_names = ["MIMO_STORY_CONTEXT_MODEL", "MIMO_TRANSLATION_FALLBACK_MODEL"]
         managed_names = set(gemini_key_names + mimo_key_names + model_names)
@@ -1132,7 +1133,8 @@ class App(tk.Tk):
 
         gemini_vars: list[tk.StringVar] = []
         for index, key_name in enumerate(gemini_key_names, 1):
-            ttk.Label(body, text=f"Gemini Key {index}").grid(
+            label = "Gemini API Key (legacy)" if key_name == "GEMINI_API_KEY" else f"Gemini Project Key {index - 1}"
+            ttk.Label(body, text=label).grid(
                 row=index + 1, column=0, sticky="w", padx=(0, 12), pady=4)
             variable = tk.StringVar(value=current.get(key_name, ""))
             gemini_vars.append(variable)
@@ -1140,29 +1142,29 @@ class App(tk.Tk):
                 row=index + 1, column=1, sticky="ew", pady=4)
 
         ttk.Separator(body, orient="horizontal").grid(
-            row=5, column=0, columnspan=2, sticky="ew", pady=(12, 12))
+            row=6, column=0, columnspan=2, sticky="ew", pady=(12, 12))
         ttk.Label(body, text="MiMo — API Key", font=("Segoe UI Semibold", 12)).grid(
-            row=6, column=0, columnspan=2, sticky="w", pady=(0, 4))
+            row=7, column=0, columnspan=2, sticky="w", pady=(0, 4))
         ttk.Label(body, text="MiMo API Key ကို Gemini Key နဲ့ မရောဘဲ ဒီအကွက်မှာပဲ ထည့်ပါ။",
                   style="Muted.TLabel", wraplength=540).grid(
-            row=7, column=0, columnspan=2, sticky="w", pady=(0, 6))
+            row=8, column=0, columnspan=2, sticky="w", pady=(0, 6))
         ttk.Label(body, text="MiMo API Key").grid(
-            row=8, column=0, sticky="w", padx=(0, 12), pady=4)
+            row=9, column=0, sticky="w", padx=(0, 12), pady=4)
         mimo_key_var = tk.StringVar(value=current.get("MIMO_API_KEY", ""))
         ttk.Entry(body, textvariable=mimo_key_var, width=62, show="*").grid(
-            row=8, column=1, sticky="ew", pady=4)
+            row=9, column=1, sticky="ew", pady=4)
 
         ttk.Separator(body, orient="horizontal").grid(
-            row=9, column=0, columnspan=2, sticky="ew", pady=(12, 12))
+            row=10, column=0, columnspan=2, sticky="ew", pady=(12, 12))
         ttk.Label(body, text="MiMo — Model Selection", font=("Segoe UI Semibold", 12)).grid(
-            row=10, column=0, columnspan=2, sticky="w", pady=(0, 6))
+            row=11, column=0, columnspan=2, sticky="w", pady=(0, 6))
         model_options = ("mimo-v2.6-pro", "mimo-v2.6-flash", "mimo-v2.6-pro-ultraspeed")
         ttk.Label(body, text="Story Context Model").grid(
-            row=11, column=0, sticky="w", padx=(0, 12), pady=4)
+            row=13, column=0, sticky="w", padx=(0, 12), pady=4)
         story_model_var = tk.StringVar(
             value=current.get("MIMO_STORY_CONTEXT_MODEL", "mimo-v2.6-pro") or "mimo-v2.6-pro")
         ttk.Combobox(body, textvariable=story_model_var, values=model_options, state="readonly", width=38).grid(
-            row=11, column=1, sticky="ew", pady=4)
+            row=13, column=1, sticky="ew", pady=4)
         ttk.Label(body, text="Translation Fallback Model").grid(
             row=12, column=0, sticky="w", padx=(0, 12), pady=4)
         translation_model_var = tk.StringVar(
@@ -1173,7 +1175,7 @@ class App(tk.Tk):
         ttk.Label(body, text="အကွက်ဗလာထားရင် သက်ဆိုင်ရာ API Key ကို .env မှ ဖယ်ရှားပါမယ်။\\n"
                              "Model နှစ်ခုကို သီးခြားရွေးနိုင်ပြီး Save လုပ်ပြီးနောက် START / RESUME မှာ အသုံးပြုပါမယ်။",
                   style="Muted.TLabel", wraplength=540, justify="left").grid(
-            row=13, column=0, columnspan=2, sticky="w", pady=(12, 12))
+            row=14, column=0, columnspan=2, sticky="w", pady=(12, 12))
 
         def save_keys() -> None:
             values = {
@@ -1195,7 +1197,7 @@ class App(tk.Tk):
                     preserved.append(f"{name}={value}")
             try:
                 env_path.parent.mkdir(parents=True, exist_ok=True)
-                env_path.write_text("\\n".join(preserved) + ("\\n" if preserved else ""), encoding="utf-8")
+                env_path.write_text("\n".join(preserved) + ("\n" if preserved else ""), encoding="utf-8")
                 self.gemini_env.set(str(env_path))
                 self.cfg["gemini_env_path"] = str(env_path)
                 save_config(self.cfg)
@@ -1214,7 +1216,7 @@ class App(tk.Tk):
             )
 
         buttons = ttk.Frame(body)
-        buttons.grid(row=14, column=0, columnspan=2, sticky="e")
+        buttons.grid(row=15, column=0, columnspan=2, sticky="e")
         ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=(6, 0))
         ttk.Button(buttons, text="Save Keys & Models", style="Accent.TButton", command=save_keys).pack(side="right")
         dialog.update_idletasks()

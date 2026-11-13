@@ -1088,7 +1088,7 @@ class App(tk.Tk):
     def _browse_env(self) -> None:
         current = self.gemini_env.get().strip()
         initial = str(Path(current).parent) if current else str(ROOT_DIR.parent)
-        p = filedialog.askopenfilename(title="Select .env containing Gemini and GLM API settings", initialdir=initial, filetypes=[("ENV", ".env"), ("All", "*.*")])
+        p = filedialog.askopenfilename(title="Select .env containing AI provider API settings", initialdir=initial, filetypes=[("ENV", ".env"), ("All", "*.*")])
         if p:
             self.gemini_env.set(p)
 
@@ -1239,8 +1239,9 @@ class App(tk.Tk):
                 "API Keys & Models",
                 f"Gemini Key {sum(bool(variable.get().strip()) for variable in gemini_vars)} ခု၊ "
                 f"GLM Key {'ထည့်ပြီး' if values['GLM_API_KEY'] else 'မထည့်ထား'}။\\n"
-                f"Story Context: {values['GLM_STORY_CONTEXT_MODEL']}\\n"
-                f"Translation Fallback: {values['GLM_TRANSLATION_FALLBACK_MODEL']}\\n"
+                f"Azure Foundry: {'ပြင်ဆင်ပြီး' if values['AZURE_AI_FOUNDRY_API_KEY'] and values['AZURE_AI_FOUNDRY_ENDPOINT'] else 'မပြင်ဆင်ရသေး'}။\\n"
+                f"Story Context Deployment: {values['AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT'] or 'မထည့်ထား'}\\n"
+                f"Translation Deployment: {values['AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT'] or 'မထည့်ထား'}\\n"
                 "နောက်တစ်ကြိမ် START / RESUME မှာ အသုံးပြုပါမယ်။",
                 parent=self,
             )

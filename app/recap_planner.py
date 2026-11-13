@@ -1378,7 +1378,8 @@ def build_story_context(
     if reuse and checkpoint_path and checkpoint_path.is_file():
         try:
             saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-            if saved.get("planner_mode") == PLANNER_MODE and saved.get("source_fingerprint") == source_fingerprint:
+            if (saved.get("version") == 2 and saved.get("planner_mode") == PLANNER_MODE
+                    and saved.get("source_fingerprint") == source_fingerprint):
                 completed = int(saved.get("completed_batches", 0) or 0)
                 saved_memory = saved.get("context")
                 if 0 <= completed <= len(batches) and isinstance(saved_memory, dict):
@@ -1457,6 +1458,7 @@ SOURCE CHUNK {i}/{len(batches)}:
         }
         if checkpoint_path:
             _atomic_json(checkpoint_path, {
+                "version": 2,
                 "planner_mode": PLANNER_MODE,
                 "source_fingerprint": source_fingerprint,
                 "completed_batches": i,

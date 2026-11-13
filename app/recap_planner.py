@@ -1815,7 +1815,7 @@ class RecapPlanBuilder:
         gemini_text_model: str = "gemini-3.5-flash",
         ollama_url: str = "http://127.0.0.1:11434",
         ollama_model: str = "qwen3:4b",
-        ollama_timeout_seconds: int = 240,
+        ollama_timeout_seconds: int = 600,
         source_language: str = "auto",
         whisper_model_other: str = WHISPER_MODEL_OTHER,
     ):

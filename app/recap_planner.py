@@ -1451,7 +1451,10 @@ SOURCE CHUNK {i}/{len(batches)}:
             "name_glossary": _merge_name_glossary(
                 list(memory.get("name_glossary") or []),
                 data.get("name_glossary"),
-                legacy_entries=memory.get("name_consistency") or [],
+                legacy_entries=(
+                    list(memory.get("name_consistency") or [])
+                    + list(data.get("name_consistency") or [])
+                ),
                 log=log,
             ),
             "unresolved": list(data.get("unresolved") or []),

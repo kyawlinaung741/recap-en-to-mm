@@ -213,5 +213,20 @@ class OnlyEnglishToMyanmarTests(unittest.TestCase):
 
 
 
+    def test_mimo_fallback_also_covers_sentence_lock_audit(self):
+        rows = [dict(_unit(1, 0.0, 2.0, "He came home."), translation="သူ အိမ်ပြန်လာတယ်။")]
+        with mock.patch.object(rp, "_gemini_json", side_effect=rp.GeminiKeyPoolExhaustedError("quota")):
+            with mock.patch.object(rp, "_mimo_chat_json", return_value={
+                "checks": [{"id": 1, "status": "pass"}]
+            }) as mimo:
+                audited = rp.audit_and_repair_batch(
+                    None, rows, story_context={}, previous_context=[], next_context=[],
+                    log=lambda _m: None, mimo_api_key="test-key", mimo_model="mimo-v2.6-flash",
+                )
+        self.assertEqual(audited[0]["translation"], "သူ အိမ်ပြန်လာတယ်။")
+        mimo.assert_called_once()
+
+
+
 if __name__ == "__main__":
     unittest.main()

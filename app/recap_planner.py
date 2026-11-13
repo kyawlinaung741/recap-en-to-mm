@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[int, int, str], None]
-PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v4_glm_story_context"
+PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v5_azure_foundry_story_translation"
 TRANSLATION_DIRECTION = "en_to_mm"   # an English video's direction; others are "<code>_to_mm" (2026-10-17)
 # Whole-sentence lines like VOXCPM recap (2026-10-12): a line ends at a sentence end (or a clause after 6.5 s,
 # a breath after 10 s, at most 24 s). The old 4-6 s lines cut 20-35% of sentences in two, and Gemini then told a
@@ -2051,7 +2051,11 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
                 last_error = exc
                 prefix = "   " * depth
                 log(f"{prefix}⚠️ Sentence-lock audit attempt {attempt}/4 failed ({provider}): {exc}")
-                if provider == "gemini" and gemini_attempts >= 2 and glm_api_key:
+                if provider == "azure" and azure_attempts >= 3:
+                    provider = "gemini"
+                    log(f"{prefix}🛟 Azure AI Foundry audit retries failed; switching this audit batch to Gemini.")
+                    prompt = base_prompt
+                elif provider == "gemini" and gemini_attempts >= 2 and glm_api_key:
                     provider = "glm"
                     log(f"{prefix}🛟 Gemini audit retries failed; switching this audit batch to GLM.")
                     prompt = base_prompt
@@ -2307,7 +2311,7 @@ class RecapPlanBuilder:
             source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}")
         # Keep existing local Whisper transcripts when upgrading an older job to GLM Story Context.
         legacy_transcript_fp = _source_fingerprint_for_mode(
-            source, "timestamp_translation_en_to_mm_narrator_v3_quality|" + direction
+            source, "timestamp_translation_en_to_mm_narrator_v4_glm_story_context|" + direction
             + f"|whisper:{whisper_model}:{whisper_language}")
         # Keep the Whisper transcript from the previous MiMo-based planner when only the
         # text provider changes; Story Context and translations are rebuilt for GLM.
@@ -2498,7 +2502,7 @@ class RecapPlanBuilder:
 
             self.progress(1, 4, "Story context memory")
             self.log(f"🧠 [2/4] Story Context — Azure AI Foundry primary ({azure_story_deployment or 'not configured'}), Gemini fallback ({self.gemini_text_model})...")
-            context_source_fp = fp + "|seg:" + segmentation_profile + "|glm:" + glm_model + "|gemini:" + str(self.gemini_text_model)
+            context_source_fp = fp + "|seg:" + segmentation_profile + "|azure:" + azure_endpoint + ":" + azure_story_deployment + "|gemini:" + str(self.gemini_text_model)
             story_context = build_story_context(
                 ai, units,
                 batch_max_items=self.story_context_batch_max_items,

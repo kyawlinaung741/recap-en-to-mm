@@ -1301,6 +1301,18 @@ class OllamaTranslationClient:
         self.timeout_seconds = max(30, min(int(timeout_seconds), 900))
         self.session = requests.Session()
 
+    @staticmethod
+    def _ollama_schema(schema: Any) -> Any:
+        if isinstance(schema, dict):
+            return {
+                key: (str(value).lower() if key == "type" and isinstance(value, str)
+                      else OllamaTranslationClient._ollama_schema(value))
+                for key, value in schema.items()
+            }
+        if isinstance(schema, list):
+            return [OllamaTranslationClient._ollama_schema(item) for item in schema]
+        return schema
+
     def generate_json(self, prompt: str, response_schema: dict[str, Any] | None = None) -> Any:
         try:
             response = self.session.post(
@@ -1309,7 +1321,7 @@ class OllamaTranslationClient:
                     "model": self.model,
                     "messages": [{"role": "user", "content": prompt}],
                     "stream": False,
-                    "format": response_schema or "json",
+                    "format": self._ollama_schema(response_schema) if response_schema else "json",
                     "think": False,
                     "options": {"temperature": 0.2, "num_ctx": 8192},
                 },
@@ -1985,9 +1997,18 @@ class RecapPlanBuilder:
                 key_pool.append(("GEMINI_API_KEY", inherited_key))
         if not key_pool:
             raise RuntimeError(
-                "Gemini API key မတွေ့ပါ။ .env ထဲမှာ GEMINI_API_KEY=... "
-                "(သို့) GEMINI_IMAGE_PROJECT_1_KEY, GEMINI_IMAGE_PROJECT_2_KEY ... ထည့်ပေးပါ။"
+                "Gemini API key မတွေ့ပါ။ Story Context နဲ့ Translation Audit အတွက် .env ထဲမှာ "
+                "GEMINI_API_KEY=... (သို့) GEMINI_IMAGE_PROJECT_1_KEY, GEMINI_IMAGE_PROJECT_2_KEY ... ထည့်ပေးပါ။"
             )
+        # Read optional Ollama overrides from the same .env file after it has been loaded.
+        self.ollama_url = _clean(os.getenv("OLLAMA_BASE_URL")) or self.ollama_url
+        self.ollama_model = _clean(os.getenv("OLLAMA_MODEL")) or self.ollama_model
+        try:
+            self.ollama_timeout_seconds = max(30, min(
+                int(os.getenv("OLLAMA_TIMEOUT_SECONDS", self.ollama_timeout_seconds)), 900
+            ))
+        except (TypeError, ValueError):
+            self.log("⚠️ Invalid OLLAMA_TIMEOUT_SECONDS; using the default timeout.")
         os.environ["GEMINI_API_KEY"] = key_pool[0][1]
         os.environ["GEMINI_TEXT_MODEL"] = self.gemini_text_model
         self.log(f"🔑 Gemini key pool ready — {len(key_pool)} key(s) | translation only ({language_name} source uses local Whisper {whisper_model})")

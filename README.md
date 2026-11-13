@@ -1,7 +1,7 @@
 # Recap → Myanmar (+ Splitter)
 
 **English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … ဘာသာစကားမျိုးစုံနဲ့ ပြောထားတဲ့ ဇာတ်လမ်း/Recap video ကို မြန်မာ Narrator အသံနဲ့ ပြန်လည်တင်ဆက်ပေးတဲ့ Windows tool**
-Myanmar story narration · Whisper + Azure AI Foundry Story Context/Translation + Gemini fallback · Edge TTS / Gemini TTS · Smart Sync
+Myanmar story narration · Whisper + Gemini Story Context/Translation + Gemini fallback · Edge TTS / Gemini TTS · Smart Sync
 **Splitter** tab — ရှည်တဲ့ video ကို မိနစ်အလိုက် အပိုင်းခွဲ (Ratio + blur နောက်ခံ၊ စာ၊ Part နံပါတ်)
 
  > English: turns a story/recap video into natural Burmese narrator-style storytelling. Gemini preserves the plot,
@@ -18,8 +18,8 @@ Myanmar story narration · Whisper + Azure AI Foundry Story Context/Translation 
    - English ဆို `small.en` (~460 MB)၊ တခြားဘာသာဆို `medium` (~1.5 GB, multilingual) နဲ့ နားထောင်တယ်။ Model တွေကို ပထမဆုံးအကြိမ်ပဲ download လုပ်ရတယ်။
    - ဟိန္ဒီနဲ့ Urdu က အသံတူလို့ Auto-detect မှာ Urdu ထွက်ရင် ဟိန္ဒီအဖြစ် ရေးတယ်။
 2. **အပိုင်းခွဲ** — စာကြောင်း၊ သဘာဝကျတဲ့ စကားစုနဲ့ အသံရပ်တဲ့နေရာတွေကို အခြေခံပြီး sync unit ခွဲတယ်။ စာကြောင်းရှည်ရင် အသက်ရှူရပ်နားလို့ သင့်တဲ့ နေရာမှာ ခွဲပေးတယ်။
-3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Azure AI Foundry က Whisper transcript တစ်ကားလုံးကို အပိုင်းလိုက်ဖတ်ပြီး ဇာတ်ကောင်၊ ဆက်နွယ်မှု၊ မူရင်းနာမည်၊ တရုတ် Pinyin၊ မြန်မာအသံထွက် Canonical Name Glossary နဲ့ ဇာတ်လမ်းနောက်ခံကို တည်ဆောက်တယ်။
-4. **ဘာသာပြန်** — Azure AI Foundry က Story Context Memory ကို batch တိုင်းမှာ ကိုးကားပြီး မြန်မာ Narrator ပုံစံနဲ့ ဦးဆောင်ဘာသာပြန်တယ်။ Azure မအောင်မြင်ပါက Gemini ကို fallback အဖြစ် သုံးတယ်။
+3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Gemini က Whisper transcript တစ်ကားလုံးကို အပိုင်းလိုက်ဖတ်ပြီး ဇာတ်ကောင်၊ ဆက်နွယ်မှု၊ မူရင်းနာမည်၊ တရုတ် Pinyin၊ မြန်မာအသံထွက် Canonical Name Glossary နဲ့ ဇာတ်လမ်းနောက်ခံကို တည်ဆောက်တယ်။
+4. **ဘာသာပြန်** — Gemini က Story Context Memory ကို batch တိုင်းမှာ ကိုးကားပြီး မြန်မာ Narrator ပုံစံနဲ့ ဦးဆောင်ဘာသာပြန်တယ်။ Azure မအောင်မြင်ပါက Gemini ကို fallback အဖြစ် သုံးတယ်။
    - မူရင်းဇာတ်လမ်းရဲ့ အချက်အလက်၊ အစဉ်လိုက်ဖြစ်စဉ်၊ ဇာတ်ကောင်နာမည်နဲ့ ဆက်နွယ်မှုတွေကို ထိန်းထားပြီး သဘာဝကျတဲ့ မြန်မာဇာတ်ကြောင်းပြောပုံစံ သုံးတယ်။ Direct Dub ပုံစံ မဟုတ်ဘူး။
    - A/B/C/S အဆင့်သတ်မှတ်ချက်တွေကို subtitle စာသားမှာ မူရင်းအတိုင်း ထိန်းပြီး Narrator ဖတ်တဲ့အခါမှ အေ/ဘီ/စီ/အက်စ် အဆင့်လို့ အသံထွက်ပြောင်းပေးတယ်။
    - နံပါတ်နဲ့ ရာခိုင်နှုန်းတွေကို မြန်မာစကားပြောပုံစံအဖြစ် ပြောင်းပြီး `%` ကို ရာခိုင်နှုန်း၊ `&` ကို နှင့် လို့ ပြောင်းပေးတယ်။
@@ -54,12 +54,8 @@ Myanmar story narration · Whisper + Azure AI Foundry Story Context/Translation 
 4. **`.env.example`** ကို **`.env`** လို့ copy ကူးပါ။ ပြီးရင် ဖွင့်ပြီး key ထည့်ပါ:
    ```ini
    GEMINI_API_KEY=ကိုယ့်_Gemini_key
-   AZURE_AI_FOUNDRY_API_KEY=ကိုယ့်_Azure_resource_key
-   AZURE_AI_FOUNDRY_ENDPOINT=https://your-resource.services.ai.azure.com
-   AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT=your-story-deployment
-   AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT=your-translation-deployment
-   ```
-   Microsoft Foundry မှာ chat-completion model တစ်ခု deploy လုပ်ပြီး Resource/API key, endpoint နဲ့ deployment name ကိုယူပါ။ App ရဲ့ **API Keys / Models** ထဲမှာ Azure အကွက်တွေကို ဖြည့်ပါ။ Endpoint က Resource endpoint ဖြစ်ရပြီး app က OpenAI-compatible `/openai/v1/chat/completions` route ကို အသုံးပြုပါတယ်။ Story Context နဲ့ Translation နှစ်ခုလုံးမှာ Azure AI Foundry ကို အရင်စမ်းပြီး မအောင်မြင်ရင် Gemini ကို fallback သုံးပါတယ်။ Azure မအောင်မြင်ပါက Gemini ကို fallback အဖြစ် သုံးပါတယ်။ Azure model deployment နဲ့ usage အတွက် သက်ဆိုင်ရာ Azure billing/quota သတ်မှတ်ချက်တွေ ရှိနိုင်ပါတယ်။
+               ```
+   Microsoft Foundry မှာ chat-completion model တစ်ခု deploy လုပ်ပြီး Resource/API key, endpoint နဲ့ deployment name ကိုယူပါ။ App ရဲ့ **API Keys / Models** ထဲမှာ Azure အကွက်တွေကို ဖြည့်ပါ။ Endpoint က Resource endpoint ဖြစ်ရပြီး app က OpenAI-compatible `/openai/v1/chat/completions` route ကို အသုံးပြုပါတယ်။ Story Context နဲ့ Translation နှစ်ခုလုံးမှာ Gemini ကို အရင်စမ်းပြီး မအောင်မြင်ရင် Gemini ကို fallback သုံးပါတယ်။ Azure မအောင်မြင်ပါက Gemini ကို fallback အဖြစ် သုံးပါတယ်။ Azure model deployment နဲ့ usage အတွက် သက်ဆိုင်ရာ Azure billing/quota သတ်မှတ်ချက်တွေ ရှိနိုင်ပါတယ်။
 
 > ⚠️ `.env` ထဲမှာ ကိုယ့် key ရှိလို့ ဘယ်သူ့ကိုမှ မပို့ပါနဲ့၊ GitHub ပေါ်လည်း မတင်ပါနဲ့ (`.gitignore` ထဲမှာ ထည့်ထားပြီးသားပါ)။
 
@@ -272,8 +268,8 @@ videos into parts.
    letters). Where Whisper writes few sentence marks, the end of a Whisper segment counts as a sentence end.
 2. **Split** — sentence/clause/pause boundaries give short sync units (about 4.2 s, at most 5.6 s);
    more units = more sync anchors.
-3. **Story memory** — Azure AI Foundry reads the complete movie transcript in chunks and builds the movie-wide context and canonical source-name → Pinyin → Burmese-pronunciation glossary. If Azure AI Foundry Story Context fails, Gemini automatically builds that context chunk with the same context instructions.
-4. **Translate** — Azure AI Foundry reads the Story Context memory and leads translation of up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing). If Azure fails, Gemini takes over with the same full translation prompt, Story Context, ID list, and validation rules.
+3. **Story memory** — Gemini reads the complete movie transcript in chunks and builds the movie-wide context and canonical source-name → Pinyin → Burmese-pronunciation glossary. If Gemini Story Context fails, Gemini automatically builds that context chunk with the same context instructions.
+4. **Translate** — Gemini reads the Story Context memory and translates up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing).
    (no summary, no shortening, every unit keeps its own content), then an audit pass repairs
    omissions/shifts/duplicates. A known name mentioned in a source line must appear with its exact
    glossary spelling in Burmese; inconsistent names are retried and never silently accepted. Letters of
@@ -294,7 +290,7 @@ The final output uses the generated Myanmar narration track; the original source
 
 ### Requirements
 Windows 10/11 64-bit · Python 3.12 64-bit (with tcl/tk, on PATH) · FFmpeg (`ffmpeg.exe` +
-`ffprobe.exe` on PATH, in `C:\ffmpeg\bin`, or in a folder named `ffmpeg` here) · a Gemini API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) · a Zhipu BigModel API key (required for Story Context) · internet. An NVIDIA GPU is
+`ffprobe.exe` on PATH, in `C:\ffmpeg\bin`, or in a folder named `ffmpeg` here) · a Gemini API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) · internet. An NVIDIA GPU is
 optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself).
 
 ### Install
@@ -302,7 +298,7 @@ optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself)
 2. Run **`INSTALL_REQUIREMENTS.bat`** (pip packages, Chromium for the Myanmar title renderer, and
    FFmpeg: when it is not on PATH or in `C:\ffmpeg\bin`, about 100 MB is downloaded into `ffmpeg\`).
    `[WinError 2] The system cannot find the file specified` means FFmpeg is missing — run it again.
-3. Copy **`.env.example`** to **`.env`** and set your Gemini key and Azure AI Foundry API key, endpoint, Story Context deployment, and Translation deployment. Azure AI Foundry is used for Story Context and translation; Gemini automatically takes over if an Azure request fails. More keys
+3. Copy **`.env.example`** to **`.env`** and set your Gemini key and Gemini API key, endpoint, Story Context deployment, and Translation deployment. Gemini is used for Story Context and translation; Gemini automatically takes over if an Azure request fails. More keys
    (`GEMINI_IMAGE_PROJECT_1_KEY`, `GEMINI_IMAGE_PROJECT_2_KEY`, …) are used in turn when one is used
    up; after all keys the next model is tried
    (`gemini-3.5-flash → 3.5-flash-lite → 3.6-flash → 3.7-flash → 3.1-flash-lite`).

@@ -1,4 +1,4 @@
-# Recap English -> Myanmar (narrator, Edge TTS, Smart Sync) - Python 3.12, 64-bit (python.org installer, tcl/tk ticked)
+# Recap English -> Myanmar (Ollama Qwen translation + Gemini context/audit, Edge TTS, Smart Sync) - Python 3.12, 64-bit (python.org installer, tcl/tk ticked)
 #
 # Install (or just run INSTALL_REQUIREMENTS.bat):
 #   py -3.12 -m pip install -r requirements.txt
@@ -6,7 +6,7 @@
 #
 # Not installed by pip:
 #   - FFmpeg: ffmpeg.exe + ffprobe.exe on PATH, in C:\\ffmpeg\\bin, or in a folder named ffmpeg next to RUN.bat
-#   - Gemini key: copy .env.example to .env and put your key in it
+#   - Gemini key: copy .env.example to .env; used for Story Context and Translation Audit
 
 google-genai==2.34.0        # Gemini translation; latest v2 line, avoids v3 API-default breaking change
 python-dotenv==1.0.1        # reads the Gemini key from .env

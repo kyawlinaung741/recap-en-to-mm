@@ -1489,9 +1489,9 @@ CRITICAL OUTPUT ID PROTOCOL:
             _assert_no_adjacent_translation_duplicates(translated, previous_context)
             stray = [f"ID {int(x['id']):05d}: {' '.join(_foreign_letters(x['translation']))}"
                      for x in translated if _foreign_letters(x["translation"])]
-            if stray and attempt < 4:
+            if stray:
                 raise ValueError("letters of another script inside the Burmese (" + "; ".join(stray) +
-                                 "); write every word in Burmese script")
+                                 "); write every word in Burmese script. Invalid characters are never stripped because that can corrupt a Burmese word.")
             english = [f"ID {int(x['id']):05d}: {', '.join(_latin_words(x['translation']))}"
                        for x in translated if _latin_words(x["translation"])]
             notes = [f"ID {int(x['id']):05d}" for x in translated if _note_text(x["translation"])]
@@ -2260,7 +2260,15 @@ class RecapPlanBuilder:
                 ]
                 if remaining_english:
                     raise RuntimeError("English words remain after translation audit; refusing to send incomplete Burmese text to TTS: " + "; ".join(remaining_english[:10]))
-                translated = _drop_foreign_letters(translated, self.log)
+                foreign_rows = [
+                    f"ID {int(row['id']):05d}: {' '.join(_foreign_letters(row.get('translation')))}"
+                    for row in translated if _foreign_letters(row.get("translation"))
+                ]
+                if foreign_rows:
+                    raise RuntimeError(
+                        "Foreign-script characters remain after translation audit; refusing to corrupt or save "
+                        "these Burmese lines: " + "; ".join(foreign_rows[:10])
+                    )
                 for a, b in find_repeated_next_lines(translated, translated_all[-1:]) + find_near_duplicates(translated, translated_all[-2:]):
                     self.log(f"⚠️ IDs {a:05d}/{b:05d} may say the same thing twice; Edit Text can fix the lines")
                 translated_all.extend(translated)

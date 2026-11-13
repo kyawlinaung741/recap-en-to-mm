@@ -1791,6 +1791,7 @@ and canonical Burmese name glossary as authoritative. Return JSON only with the 
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
+            mimo_api_key=mimo_api_key, mimo_model=mimo_model,
         )
         combined = translated_left + translated_right
         _assert_no_adjacent_translation_duplicates(combined, list(previous_context or []))

@@ -52,6 +52,7 @@ NARRATOR_VOICES = EDGE_VOICES + GEMINI_VOICES        # gemini_tts.py: one narrat
 FILL_LABELS = {"blur": "Blur background", "black": "Black bars", "crop": "Crop to fill"}
 # Source language (2026-10-17): any language → Myanmar; Auto-detect asks Whisper which language the video speaks.
 LANGUAGE_LABELS = {"auto": "Auto-detect", **SOURCE_LANGUAGES}
+TRANSLATION_ENGINE_LABELS = {"gemini": "Gemini (API)", "nllb": "NLLB-200 (Local)"}
 
 
 def _tool_path(cfg: dict, name: str) -> str:
@@ -158,6 +159,8 @@ class App(tk.Tk):
                           or self.cfg.get("edge_tts_voice") or EDGE_VOICES[0])
         self.edge_voice = tk.StringVar(value=saved_voice if saved_voice in NARRATOR_VOICES else EDGE_VOICES[0])
         self.gemini_direction = tk.StringVar(value=str(self.cfg.get("gemini_direction") or ""))
+        saved_translation_engine = str(self.cfg.get("translation_engine") or "gemini").strip().lower()
+        self.translation_engine = tk.StringVar(value=TRANSLATION_ENGINE_LABELS.get(saved_translation_engine, TRANSLATION_ENGINE_LABELS["gemini"]))
         self._subtitle_preview_key = None
         self._subtitle_preview_path = None
         self._subtitle_busy = False
@@ -337,6 +340,10 @@ class App(tk.Tk):
         ttk.Label(source_box, text="Output").grid(row=2, column=0, sticky="w", padx=(0, 8), pady=3)
         ttk.Label(source_box, text="Myanmar  ·  Narrator only  ·  Edge / Gemini TTS").grid(
             row=2, column=1, columnspan=2, sticky="w", pady=3)
+        ttk.Label(source_box, text="Translation Engine").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=3)
+        ttk.Combobox(source_box, textvariable=self.translation_engine, state="readonly",
+                     values=tuple(TRANSLATION_ENGINE_LABELS.values())).grid(row=3, column=1, sticky="ew", pady=3)
+        hint(3, "NLLB Local = စက်ထဲမှာပဲ ဘာသာပြန်မယ် · Story Context အတွက် Gemini key လိုသေးတယ်")
 
         self.edge_voice_label = ttk.Label(source_box, text="Narrator Voice")
         self.edge_voice_label.grid(row=11, column=0, sticky="w", padx=(0, 8), pady=3)
@@ -1278,6 +1285,7 @@ class App(tk.Tk):
         self.cfg["edge_tts_voice_mm"] = settings["edge_tts_voice"]
         self.cfg["narrator_voice"] = settings["voice"]
         self.cfg["gemini_direction"] = settings["gemini_direction"]
+        self.cfg["translation_engine"] = settings.get("translation_engine", "gemini")
         self.cfg["subtitles"] = settings["overlays"]["subtitles"]
         self.cfg["edge_tts_rate"] = settings["edge_tts_rate"]
         self.cfg["edge_tts_pitch"] = settings["edge_tts_pitch"]
@@ -1368,6 +1376,7 @@ class App(tk.Tk):
             "gemini_env_path": str(gemini_env) if gemini_env is not None else "",
             "voice": voice,
             "gemini_direction": self.gemini_direction.get().strip(),
+            "translation_engine": next((key for key, label in TRANSLATION_ENGINE_LABELS.items() if label == self.translation_engine.get()), "gemini"),
             # V0.3 behavior, hidden from UI.
             "max_video_speed": float(self.cfg.get("max_video_speed", 1.25)),
             "max_video_slow": float(self.cfg.get("max_video_slow", 1.35)),
@@ -1470,7 +1479,7 @@ class App(tk.Tk):
         self.progress["value"] = 0
         self.status.set("STARTING")
         self.stage.set("Preparing")
-        self._log(f"📦 {self.source_language.get()} → Myanmar · Narrator only · Edge TTS · V2 Smart Sync")
+        self._log(f"📦 {self.source_language.get()} → Myanmar · {self.translation_engine.get()} · Narrator only · Edge TTS · V2 Smart Sync")
         self._log(f"📁 App root: {ROOT_DIR}")
         if batch:
             self._log(f"📂 Folder batch: {len(batch)} video(s) — one at a time")
@@ -1590,6 +1599,7 @@ class App(tk.Tk):
             "reuse": settings["reuse_transcript_and_plan"],
             "stop_file": str(stop_file),
             "source_language": settings.get("source_language", "auto"),
+            "translation_engine": settings.get("translation_engine", "gemini"),
             "whisper_model_other": cfg_values.get("whisper_model_other", "medium"),
         }
         for key in (

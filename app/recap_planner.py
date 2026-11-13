@@ -2231,6 +2231,11 @@ class RecapPlanBuilder:
         legacy_transcript_fp = _source_fingerprint_for_mode(
             source, "timestamp_translation_en_to_mm_narrator_v3_quality|" + direction
             + f"|whisper:{whisper_model}:{whisper_language}")
+        # Keep the Whisper transcript from the previous MiMo-based planner when only the
+        # text provider changes; Story Context and translations are rebuilt for GLM.
+        previous_provider_transcript_fp = _source_fingerprint_for_mode(
+            source, "timestamp_translation_en_to_mm_narrator_v3_mimo_story_context|" + direction
+            + f"|whisper:{whisper_model}:{whisper_language}")
         segmentation_profile = _job_segmentation_profile(state_file, translations_file)
         sentence_lines = segmentation_profile == SEGMENTATION_PROFILE
 
@@ -2312,7 +2317,7 @@ class RecapPlanBuilder:
         if reuse and transcript_file.is_file() and state_file.is_file():
             try:
                 state = json.loads(state_file.read_text(encoding="utf-8"))
-                if state.get("source_fingerprint") in {fp, legacy_transcript_fp} and state.get("transcript_ready") is True:
+                if state.get("source_fingerprint") in {fp, legacy_transcript_fp, previous_provider_transcript_fp} and state.get("transcript_ready") is True:
                     candidate = json.loads(transcript_file.read_text(encoding="utf-8"))
                     if (
                         candidate.get("backend") in {"faster-whisper", "openai-whisper"}

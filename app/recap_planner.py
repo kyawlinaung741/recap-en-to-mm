@@ -1818,6 +1818,8 @@ def audit_and_repair_batch(
     previous_context: list[dict[str, Any]] | None = None,
     next_context: list[dict[str, Any]] | None = None,
     log: LogFn,
+    mimo_api_key: str = "",
+    mimo_model: str = "mimo-v2.6-flash",
 ) -> list[dict[str, Any]]:
     """Mandatory per-ID ownership/completeness audit; only failed rows may be rewritten.
 
@@ -1881,11 +1883,21 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
 """
         prompt = base_prompt
         last_error: Exception | None = None
-        for attempt in range(1, 3):
+        provider = "gemini"
+        gemini_attempts = 0
+        mimo_attempts = 0
+        for attempt in range(1, 5):
             try:
-                payload = _gemini_json(
-                    ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA
-                )
+                if provider == "gemini":
+                    gemini_attempts += 1
+                    payload = _gemini_json(
+                        ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA
+                    )
+                else:
+                    mimo_attempts += 1
+                    audit_prompt = prompt + "\\n\\nGemini is unavailable. You are the fallback auditor. "
+                    audit_prompt += "Return the same strict JSON checks structure and preserve every original translation unless repair is necessary."
+                    payload = _mimo_chat_json(mimo_api_key, audit_prompt, model=mimo_model)
                 checks = payload.get("checks") if isinstance(payload, dict) else None
                 if not isinstance(checks, list):
                     raise ValueError("audit response must contain a checks array")
@@ -2487,6 +2499,8 @@ class RecapPlanBuilder:
                         previous_context=prev,
                         next_context=nxt,
                         log=self.log,
+                        mimo_api_key=mimo_api_key,
+                        mimo_model=mimo_fallback_model,
                     )
                 # The audit may rewrite a line. Re-run any such row through the strict
                 # translator before it reaches the checkpoint or Myanmar TTS.

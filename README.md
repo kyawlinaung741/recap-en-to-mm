@@ -58,7 +58,7 @@ Narrator only · Whisper + Ollama (Qwen3:4b) + Gemini Context/Audit · Microsoft
 # Ollama translation defaults (optional)
 OLLAMA_BASE_URL=http://127.0.0.1:11434
 OLLAMA_MODEL=qwen3:4b
-OLLAMA_TIMEOUT_SECONDS=240
+OLLAMA_TIMEOUT_SECONDS=600
    ```
    Key တစ်ခုထက် ပိုထည့်ချင်ရင် App ကိုဖွင့်ပြီး အပေါ်ဘက် **API Keys** ခလုတ်ကို နှိပ်ပါ။ အဲဒီနေရာမှာ Key 1၊ Key 2၊ Key 3 ဆိုပြီး အကွက် ၃ ခုရှိပါတယ်။ Google AI Studio က ရထားတဲ့ Key တွေကို အကွက်တစ်ခုစီမှာ ကူးထည့်ပြီး **Save Keys** နှိပ်ပါ။ `.env` ဖိုင်ထဲကို အလိုအလျောက် သိမ်းပေးပြီး နောက်တစ်ကြိမ် **START / RESUME** နှိပ်တဲ့အခါ သုံးပါတယ်။ Key တစ်ခုရဲ့ quota ပြည့်သွားရင် နောက် Key ကို အလိုအလျောက် ပြောင်းသုံးပါတယ်။ လက်ရှိ run နေတဲ့အလုပ်အတွင်း Key ပြောင်းထားရင် နောက်တစ်ကြိမ် START / RESUME မှာ စတင်သက်ရောက်ပါမယ်။
 

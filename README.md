@@ -36,8 +36,9 @@ Narrator only · Whisper + Ollama (Qwen3:4b) + Gemini Context/Audit · Microsoft
 |---|---|
 | Windows | 10 / 11 (64-bit) |
 | Python | **3.12, 64-bit** — [python.org](https://www.python.org/downloads/) ကနေ သွင်းပါ။ "Add python.exe to PATH" နဲ့ "tcl/tk" ကို အမှန်ခြစ်ပါ |
-| FFmpeg | `ffmpeg.exe` + `ffprobe.exe` — မရှိရင် `INSTALL_REQUIREMENTS.bat` က အလိုလို download လုပ်ပေးတယ် ([gyan.dev builds](https://www.gyan.dev/ffmpeg/builds/)) |
-| Gemini API key | အခမဲ့ ရတယ် — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| FFmpeg | `ffmpeg.exe` + `ffprobe.exe` — မရှိရင် `INSTALL_REQUIREMENTS.bat` က download လုပ်ပေးတယ် |
+| Ollama + Qwen3:4b | Local translation အတွက် `INSTALL_REQUIREMENTS.bat` က install/download လုပ်ပေးတယ် |
+| Gemini API key | Story Context နဲ့ Translation Audit အတွက် လိုအပ်တယ် — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
 | Internet | ပထမဆုံး setup မှာ Ollama/model download၊ Gemini Story Context/Audit နဲ့ Edge TTS အတွက် |
 | NVIDIA GPU | မဖြစ်မနေ မလိုဘူး။ ရှိရင် Whisper နဲ့ video render ပိုမြန်တယ် (NVENC)။ မရှိရင် CPU နဲ့ အလိုလို လုပ်တယ် |
 
@@ -172,7 +173,7 @@ Smart Sync အဆင့်မှာ **Producer / Consumer Pipeline** သုံ�
 
 ## Gemini key နဲ့ ကန့်သတ်ချက်
 
-- Gemini ကို **ဘာသာပြန်ဖို့ပဲ** သုံးတယ်။ English ကို စာသားပြောင်းတာက စက်ထဲမှာ Whisper နဲ့ လုပ်တယ်။
+- Ollama `qwen3:4b` ကို **ဘာသာပြန်ဖို့** သုံးတယ်။ Gemini ကို Story Context နဲ့ Translation Audit/လိုအပ်တဲ့ repair အတွက် သုံးတယ်။ Whisper က စက်ထဲမှာပဲ transcript ထုတ်တယ်။
 - အခမဲ့ key မှာ တစ်ရက်ကို သုံးလို့ရတဲ့ အကြိမ်ရေ ကန့်သတ်ထားတယ် (Google project တစ်ခုချင်းစီ အလိုက်)။ ပြည့်ရင်:
   - နောက် key ကို အလိုလို ပြောင်းတယ်။
   - Key တွေ အကုန်ပြည့်ရင် နောက် model ကို ပြောင်းတယ် (`gemini-3.5-flash → 3.5-flash-lite → 3.6-flash → 3.7-flash → 3.1-flash-lite`)။
@@ -231,13 +232,13 @@ English စာကို **စာကြောင်း (sentence) တစ်ကြ
 
 ```
 RUN.bat                    UI ဖွင့်ဖို့
-INSTALL_REQUIREMENTS.bat   Python package + Chromium သွင်းဖို့
+INSTALL_REQUIREMENTS.bat   Python + Chromium + FFmpeg + Ollama/Qwen3:4b သွင်းဖို့
 .env.example               Gemini key ပုံစံ (.env လို့ copy ကူးပါ)
 requirements.txt
 app/
   controller.py            UI (tkinter): preview၊ overlay၊ job တွေ စီမံတာ
   planner_worker.py        အဆင့် ၁: Whisper → story context → ဘာသာပြန် → Smart Sync plan
-  recap_planner.py         Planner (စာပိုင်းခွဲ၊ Gemini prompt၊ audit၊ ID စစ်တာ)
+  recap_planner.py         Planner (Ollama translation၊ Gemini context/audit၊ ID စစ်တာ)
   render_worker.py         အဆင့် ၂: Edge TTS → Smart Sync render
   core.py                  Edge TTS, parallel Smart Sync render, overlay, mux
   parallel_pipeline.py     bounded TTS producer / FFmpeg video consumer
@@ -317,7 +318,7 @@ optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself)
 2. Run **`INSTALL_REQUIREMENTS.bat`** (pip packages, Chromium for the Myanmar title renderer, and
    FFmpeg: when it is not on PATH or in `C:\ffmpeg\bin`, about 100 MB is downloaded into `ffmpeg\`).
    `[WinError 2] The system cannot find the file specified` means FFmpeg is missing — run it again.
-3. Copy **`.env.example`** to **`.env`** and set `GEMINI_API_KEY=`. More keys
+3. Copy **`.env.example`** to **`.env`** and set `GEMINI_API_KEY=` (needed for Story Context and Translation Audit; Ollama handles translation locally). More keys
    (`GEMINI_IMAGE_PROJECT_1_KEY`, `GEMINI_IMAGE_PROJECT_2_KEY`, …) are used in turn when one is used
    up; after all keys the next model is tried
    (`gemini-3.5-flash → 3.5-flash-lite → 3.6-flash → 3.7-flash → 3.1-flash-lite`).

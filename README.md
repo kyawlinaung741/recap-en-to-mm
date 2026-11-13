@@ -1,7 +1,7 @@
 # Recap → Myanmar (+ Splitter)
 
 **English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … ဘာသာစကားမျိုးစုံနဲ့ ပြောထားတဲ့ ဇာတ်လမ်း/Recap video ကို မြန်မာ Narrator အသံနဲ့ ပြန်လည်တင်ဆက်ပေးတဲ့ Windows tool**
-Myanmar story narration · Whisper + MiMo Story Context + Gemini-led translation (MiMo fallback) · Edge TTS / Gemini TTS · Smart Sync
+Myanmar story narration · Whisper + GLM Story Context + Gemini-led translation (GLM fallback) · Edge TTS / Gemini TTS · Smart Sync
 **Splitter** tab — ရှည်တဲ့ video ကို မိနစ်အလိုက် အပိုင်းခွဲ (Ratio + blur နောက်ခံ၊ စာ၊ Part နံပါတ်)
 
  > English: turns a story/recap video into natural Burmese narrator-style storytelling. Gemini preserves the plot,
@@ -18,8 +18,8 @@ Myanmar story narration · Whisper + MiMo Story Context + Gemini-led translation
    - English ဆို `small.en` (~460 MB)၊ တခြားဘာသာဆို `medium` (~1.5 GB, multilingual) နဲ့ နားထောင်တယ်။ Model တွေကို ပထမဆုံးအကြိမ်ပဲ download လုပ်ရတယ်။
    - ဟိန္ဒီနဲ့ Urdu က အသံတူလို့ Auto-detect မှာ Urdu ထွက်ရင် ဟိန္ဒီအဖြစ် ရေးတယ်။
 2. **အပိုင်းခွဲ** — စာကြောင်း၊ သဘာဝကျတဲ့ စကားစုနဲ့ အသံရပ်တဲ့နေရာတွေကို အခြေခံပြီး sync unit ခွဲတယ်။ စာကြောင်းရှည်ရင် အသက်ရှူရပ်နားလို့ သင့်တဲ့ နေရာမှာ ခွဲပေးတယ်။
-3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — MiMo က Whisper transcript တစ်ကားလုံးကို အပိုင်းလိုက်ဖတ်ပြီး ဇာတ်ကောင်၊ ဆက်နွယ်မှု၊ မူရင်းနာမည်၊ တရုတ် Pinyin၊ မြန်မာအသံထွက် Canonical Name Glossary နဲ့ ဇာတ်လမ်းနောက်ခံကို တည်ဆောက်တယ်။
-4. **ဘာသာပြန်** — Gemini က MiMo ရဲ့ Story Context Memory ကို batch တိုင်းမှာ ကိုးကားပြီး စကားပြောခန်းအားလုံးကို မြန်မာ Narrator ပုံစံနဲ့ ဦးဆောင်ဘာသာပြန်တယ်။ Gemini model/key fallback အားလုံး မအောင်မြင်တဲ့အခါ MiMo ကို translation fallback အဖြစ် သုံးတယ်။
+3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — GLM က Whisper transcript တစ်ကားလုံးကို အပိုင်းလိုက်ဖတ်ပြီး ဇာတ်ကောင်၊ ဆက်နွယ်မှု၊ မူရင်းနာမည်၊ တရုတ် Pinyin၊ မြန်မာအသံထွက် Canonical Name Glossary နဲ့ ဇာတ်လမ်းနောက်ခံကို တည်ဆောက်တယ်။
+4. **ဘာသာပြန်** — Gemini က GLM ရဲ့ Story Context Memory ကို batch တိုင်းမှာ ကိုးကားပြီး စကားပြောခန်းအားလုံးကို မြန်မာ Narrator ပုံစံနဲ့ ဦးဆောင်ဘာသာပြန်တယ်။ Gemini model/key fallback အားလုံး မအောင်မြင်တဲ့အခါ GLM ကို translation fallback အဖြစ် သုံးတယ်။
    - မူရင်းဇာတ်လမ်းရဲ့ အချက်အလက်၊ အစဉ်လိုက်ဖြစ်စဉ်၊ ဇာတ်ကောင်နာမည်နဲ့ ဆက်နွယ်မှုတွေကို ထိန်းထားပြီး သဘာဝကျတဲ့ မြန်မာဇာတ်ကြောင်းပြောပုံစံ သုံးတယ်။ Direct Dub ပုံစံ မဟုတ်ဘူး။
    - A/B/C/S အဆင့်သတ်မှတ်ချက်တွေကို subtitle စာသားမှာ မူရင်းအတိုင်း ထိန်းပြီး Narrator ဖတ်တဲ့အခါမှ အေ/ဘီ/စီ/အက်စ် အဆင့်လို့ အသံထွက်ပြောင်းပေးတယ်။
    - နံပါတ်နဲ့ ရာခိုင်နှုန်းတွေကို မြန်မာစကားပြောပုံစံအဖြစ် ပြောင်းပြီး `%` ကို ရာခိုင်နှုန်း၊ `&` ကို နှင့် လို့ ပြောင်းပေးတယ်။
@@ -54,11 +54,11 @@ Myanmar story narration · Whisper + MiMo Story Context + Gemini-led translation
 4. **`.env.example`** ကို **`.env`** လို့ copy ကူးပါ။ ပြီးရင် ဖွင့်ပြီး key ထည့်ပါ:
    ```ini
    GEMINI_API_KEY=ကိုယ့်_Gemini_key
-   MIMO_API_KEY=ကိုယ့်_MiMo_API_key
-   MIMO_STORY_CONTEXT_MODEL=mimo-v2.6-pro
-   MIMO_TRANSLATION_FALLBACK_MODEL=mimo-v2.6-flash
+   GLM_API_KEY=ကိုယ့်_GLM_API_key
+   GLM_STORY_CONTEXT_MODEL=glm-4.7-flash
+   GLM_TRANSLATION_FALLBACK_MODEL=glm-4.7-flash
    ```
-   MiMo key ကို Xiaomi MiMo API Console မှာ ဖန်တီးထားတဲ့ API key အဖြစ် ထည့်ပါ။ MiMo chat app ကို login ဝင်ထားတာနဲ့ API ချိတ်ဆက်ခွင့် မတူပါဘူး။ Story Context အတွက် API key လိုပါတယ်။ Key တစ်ခုထက် ပိုထည့်ချင်ရင် App ကိုဖွင့်ပြီး အပေါ်ဘက် **API Keys** ခလုတ်ကို နှိပ်ပါ။ အဲဒီနေရာမှာ Key 1၊ Key 2၊ Key 3 ဆိုပြီး အကွက် ၃ ခုရှိပါတယ်။ Google AI Studio က ရထားတဲ့ Key တွေကို အကွက်တစ်ခုစီမှာ ကူးထည့်ပြီး **Save Keys** နှိပ်ပါ။ `.env` ဖိုင်ထဲကို အလိုအလျောက် သိမ်းပေးပြီး နောက်တစ်ကြိမ် **START / RESUME** နှိပ်တဲ့အခါ သုံးပါတယ်။ Key တစ်ခုရဲ့ quota ပြည့်သွားရင် နောက် Key ကို အလိုအလျောက် ပြောင်းသုံးပါတယ်။ လက်ရှိ run နေတဲ့အလုပ်အတွင်း Key ပြောင်းထားရင် နောက်တစ်ကြိမ် START / RESUME မှာ စတင်သက်ရောက်ပါမယ်။
+   GLM key ကို Zhipu BigModel API Console မှာ ဖန်တီးထားတဲ့ API key အဖြစ် ထည့်ပါ။ GLM chat app ကို login ဝင်ထားတာနဲ့ API ချိတ်ဆက်ခွင့် မတူပါဘူး။ Story Context အတွက် API key လိုပါတယ်။ Key တစ်ခုထက် ပိုထည့်ချင်ရင် App ကိုဖွင့်ပြီး အပေါ်ဘက် **API Keys** ခလုတ်ကို နှိပ်ပါ။ အဲဒီနေရာမှာ Key 1၊ Key 2၊ Key 3 ဆိုပြီး အကွက် ၃ ခုရှိပါတယ်။ Google AI Studio က ရထားတဲ့ Key တွေကို အကွက်တစ်ခုစီမှာ ကူးထည့်ပြီး **Save Keys** နှိပ်ပါ။ `.env` ဖိုင်ထဲကို အလိုအလျောက် သိမ်းပေးပြီး နောက်တစ်ကြိမ် **START / RESUME** နှိပ်တဲ့အခါ သုံးပါတယ်။ Key တစ်ခုရဲ့ quota ပြည့်သွားရင် နောက် Key ကို အလိုအလျောက် ပြောင်းသုံးပါတယ်။ လက်ရှိ run နေတဲ့အလုပ်အတွင်း Key ပြောင်းထားရင် နောက်တစ်ကြိမ် START / RESUME မှာ စတင်သက်ရောက်ပါမယ်။
 
 > ⚠️ `.env` ထဲမှာ ကိုယ့် key ရှိလို့ ဘယ်သူ့ကိုမှ မပို့ပါနဲ့၊ GitHub ပေါ်လည်း မတင်ပါနဲ့ (`.gitignore` ထဲမှာ ထည့်ထားပြီးသားပါ)။
 
@@ -271,8 +271,8 @@ videos into parts.
    letters). Where Whisper writes few sentence marks, the end of a Whisper segment counts as a sentence end.
 2. **Split** — sentence/clause/pause boundaries give short sync units (about 4.2 s, at most 5.6 s);
    more units = more sync anchors.
-3. **Story memory** — MiMo reads the complete movie transcript in chunks and builds the movie-wide context and canonical source-name → Pinyin → Burmese-pronunciation glossary. If MiMo Story Context fails, Gemini automatically builds that context chunk with the same context instructions.
-4. **Translate** — Gemini reads that MiMo memory and leads translation of up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing). MiMo is used as a translation fallback only when Gemini's configured model/key chain cannot complete a batch. MiMo receives the exact same full translation prompt, Story Context, ID list, and validation rules as Gemini.
+3. **Story memory** — GLM reads the complete movie transcript in chunks and builds the movie-wide context and canonical source-name → Pinyin → Burmese-pronunciation glossary. If GLM Story Context fails, Gemini automatically builds that context chunk with the same context instructions.
+4. **Translate** — Gemini reads that GLM memory and leads translation of up to 40 units per request into natural Burmese narrator-style storytelling (not direct dialogue dubbing). GLM is used as a translation fallback only when Gemini's configured model/key chain cannot complete a batch. GLM receives the exact same full translation prompt, Story Context, ID list, and validation rules as Gemini.
    (no summary, no shortening, every unit keeps its own content), then an audit pass repairs
    omissions/shifts/duplicates. A known name mentioned in a source line must appear with its exact
    glossary spelling in Burmese; inconsistent names are retried and never silently accepted. Letters of
@@ -293,7 +293,7 @@ The final output uses the generated Myanmar narration track; the original source
 
 ### Requirements
 Windows 10/11 64-bit · Python 3.12 64-bit (with tcl/tk, on PATH) · FFmpeg (`ffmpeg.exe` +
-`ffprobe.exe` on PATH, in `C:\ffmpeg\bin`, or in a folder named `ffmpeg` here) · a Gemini API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) · a Xiaomi MiMo API key (required for Story Context) · internet. An NVIDIA GPU is
+`ffprobe.exe` on PATH, in `C:\ffmpeg\bin`, or in a folder named `ffmpeg` here) · a Gemini API key ([aistudio.google.com/apikey](https://aistudio.google.com/apikey)) · a Zhipu BigModel API key (required for Story Context) · internet. An NVIDIA GPU is
 optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself).
 
 ### Install
@@ -301,7 +301,7 @@ optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself)
 2. Run **`INSTALL_REQUIREMENTS.bat`** (pip packages, Chromium for the Myanmar title renderer, and
    FFmpeg: when it is not on PATH or in `C:\ffmpeg\bin`, about 100 MB is downloaded into `ffmpeg\`).
    `[WinError 2] The system cannot find the file specified` means FFmpeg is missing — run it again.
-3. Copy **`.env.example`** to **`.env`** and set both `GEMINI_API_KEY=` and `MIMO_API_KEY=`. MiMo Story Context uses `mimo-v2.6-pro` by default; Gemini leads translation, and `mimo-v2.6-flash` is the translation fallback. If MiMo cannot build Story Context, Gemini automatically takes over that context batch. You can change them with `MIMO_STORY_CONTEXT_MODEL` and `MIMO_TRANSLATION_FALLBACK_MODEL`. More keys
+3. Copy **`.env.example`** to **`.env`** and set both `GEMINI_API_KEY=` and `GLM_API_KEY=`. GLM Story Context uses `glm-4.7-flash` by default; Gemini leads translation, and GLM `glm-4.7-flash` is the translation fallback. If GLM cannot build Story Context, Gemini automatically takes over that context batch. You can change them with `GLM_STORY_CONTEXT_MODEL` and `GLM_TRANSLATION_FALLBACK_MODEL`. More keys
    (`GEMINI_IMAGE_PROJECT_1_KEY`, `GEMINI_IMAGE_PROJECT_2_KEY`, …) are used in turn when one is used
    up; after all keys the next model is tried
    (`gemini-3.5-flash → 3.5-flash-lite → 3.6-flash → 3.7-flash → 3.1-flash-lite`).

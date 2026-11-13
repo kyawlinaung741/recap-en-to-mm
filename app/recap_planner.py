@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[int, int, str], None]
-PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v3_mimo_story_context"
+PLANNER_MODE = "timestamp_translation_en_to_mm_narrator_v4_glm_story_context"
 TRANSLATION_DIRECTION = "en_to_mm"   # an English video's direction; others are "<code>_to_mm" (2026-10-17)
 # Whole-sentence lines like VOXCPM recap (2026-10-12): a line ends at a sentence end (or a clause after 6.5 s,
 # a breath after 10 s, at most 24 s). The old 4-6 s lines cut 20-35% of sentences in two, and Gemini then told a
@@ -1273,57 +1273,56 @@ def _gemini_json(
 
 
 
-def _mimo_chat_json(
+def _glm_chat_json(
     api_key: str,
     prompt: str,
     *,
     model: str,
     timeout_seconds: int = 180,
 ) -> Any:
-    """Call Xiaomi MiMo's OpenAI-compatible Chat Completions endpoint and parse JSON."""
+    """Call Zhipu BigModel's OpenAI-compatible Chat Completions endpoint and parse JSON."""
     key = str(api_key or "").strip()
     if not key:
-        raise RuntimeError("MIMO_API_KEY မတွေ့ပါ။ MiMo API key ကို .env ထဲထည့်ပါ။")
+        raise RuntimeError("GLM_API_KEY မတွေ့ပါ။ GLM API key ကို .env ထဲထည့်ပါ။")
     payload = {
-        "model": str(model or "mimo-v2.6-pro"),
+        "model": str(model or "glm-4.7-flash"),
         "messages": [
             {"role": "system", "content": "You are a precise assistant. Follow the user's output format exactly."},
             {"role": "user", "content": prompt},
         ],
-        "max_completion_tokens": 24000,
+        "max_tokens": 24000,
         "temperature": 0.2,
         "response_format": {"type": "json_object"},
-        "thinking": {"type": "disabled"},
         "stream": False,
     }
-    proxy = str(os.getenv("MIMO_PROXY") or os.getenv("GEMINI_PROXY") or "").strip()
+    proxy = str(os.getenv("GLM_PROXY") or os.getenv("GEMINI_PROXY") or "").strip()
     proxies = None
     if proxy and proxy.lower() not in {"none", "off", "direct", "0"}:
         proxies = {"http": proxy, "https": proxy}
     response = requests.post(
-        "https://api.xiaomimimo.com/v1/chat/completions",
-        headers={"api-key": key, "Content-Type": "application/json"},
+        "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         json=payload,
         timeout=max(30, min(int(timeout_seconds), 600)),
         proxies=proxies,
     )
     if response.status_code >= 400:
         detail = (response.text or "")[:1200]
-        raise RuntimeError(f"MiMo API HTTP {response.status_code}: {detail}")
+        raise RuntimeError(f"GLM API HTTP {response.status_code}: {detail}")
     data = response.json()
     choices = data.get("choices") or []
     if not choices:
-        raise RuntimeError("MiMo API returned no choices")
+        raise RuntimeError("GLM API returned no choices")
     choice = choices[0] or {}
     if choice.get("finish_reason") == "length":
-        raise RuntimeError("MiMo response was truncated (finish_reason=length)")
+        raise RuntimeError("GLM response was truncated (finish_reason=length)")
     message = choice.get("message") or {}
     raw = str(message.get("content") or "").strip()
     if not raw:
-        raise RuntimeError("MiMo returned an empty response")
+        raise RuntimeError("GLM returned an empty response")
     parsed = _extract_json_payload(raw)
     if not isinstance(parsed, dict):
-        raise RuntimeError("MiMo response must be a JSON object")
+        raise RuntimeError("GLM response must be a JSON object")
     return parsed
 
 
@@ -1471,14 +1470,14 @@ def build_story_context(
     checkpoint_path: Path | None = None,
     source_fingerprint: str = "",
     reuse: bool = True,
-    mimo_api_key: str = "",
-    mimo_model: str = "mimo-v2.6-pro",
+    glm_api_key: str = "",
+    glm_model: str = "glm-4.7-flash",
     source_language: str = "Chinese",
 ) -> dict[str, Any]:
-    """MiMo builds movie-wide context first; Gemini is the fallback context builder."""
-    use_mimo = bool(str(mimo_api_key or "").strip())
-    if not use_mimo:
-        log("⚠️ MIMO_API_KEY မရှိပါ — Story Context ကို Gemini နဲ့ တည်ဆောက်မယ်။")
+    """GLM builds movie-wide context first; Gemini is the fallback context builder."""
+    use_glm = bool(str(glm_api_key or "").strip())
+    if not use_glm:
+        log("⚠️ GLM_API_KEY မရှိပါ — Story Context ကို Gemini နဲ့ တည်ဆောက်မယ်။")
     batches = _batch_by_size(units, max_items=batch_max_items, max_chars=24000)
     memory: dict[str, Any] = {
         "characters": [], "relationships": [], "places": [], "terms": [],
@@ -1488,14 +1487,14 @@ def build_story_context(
     if reuse and checkpoint_path and checkpoint_path.is_file():
         try:
             saved = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-            if (saved.get("version") == 3 and saved.get("planner_mode") == PLANNER_MODE
+            if (saved.get("version") == 4 and saved.get("planner_mode") == PLANNER_MODE
                     and saved.get("source_fingerprint") == source_fingerprint):
                 completed = int(saved.get("completed_batches", 0) or 0)
                 saved_memory = saved.get("context")
                 if 0 <= completed <= len(batches) and isinstance(saved_memory, dict):
                     memory = saved_memory
                     if completed:
-                        log(f"♻️ MiMo Story Context resume — {completed}/{len(batches)} batches already done")
+                        log(f"♻️ GLM Story Context resume — {completed}/{len(batches)} batches already done")
                 else:
                     completed = 0
         except Exception:
@@ -1510,7 +1509,7 @@ def build_story_context(
         if i <= completed:
             continue
         if should_stop():
-            raise InterruptedError("STOP requested during MiMo story-context pass")
+            raise InterruptedError("STOP requested during GLM story-context pass")
         pinyin_rule = (
             "- For every Chinese personal/place/organization name, include standard Mandarin Pinyin with tone marks "
             "when confidently known; for ambiguous/polyphonic names use context and mark uncertain cases in unresolved. "
@@ -1550,28 +1549,28 @@ SOURCE CHUNK {i}/{len(batches)}:
 """
         last_error = None
         data = None
-        context_provider = "MiMo"
+        context_provider = "GLM"
         required = ("characters", "relationships", "places", "terms", "plot_state",
                     "name_consistency", "name_glossary", "unresolved")
-        if use_mimo:
+        if use_glm:
             for attempt in range(1, 4):
                 try:
-                    data = _mimo_chat_json(mimo_api_key, prompt, model=mimo_model)
+                    data = _glm_chat_json(glm_api_key, prompt, model=glm_model)
                     if any(not isinstance(data.get(k), list) for k in required):
-                        raise ValueError("MiMo Story Context JSON is missing required list fields")
-                    log(f"🧠 MiMo Story Context {i}/{len(batches)} completed")
+                        raise ValueError("GLM Story Context JSON is missing required list fields")
+                    log(f"🧠 GLM Story Context {i}/{len(batches)} completed")
                     break
                 except InterruptedError:
                     raise
                 except Exception as exc:
                     data = None
                     last_error = exc
-                    log(f"⚠️ MiMo Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
+                    log(f"⚠️ GLM Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
                     if attempt < 3:
                         time.sleep(attempt * 1.5)
         if data is None:
             context_provider = "Gemini fallback"
-            log(f"🛟 MiMo Story Context unavailable for chunk {i}; Gemini is taking over this context chunk.")
+            log(f"🛟 GLM Story Context unavailable for chunk {i}; Gemini is taking over this context chunk.")
             for attempt in range(1, 4):
                 if should_stop():
                     raise InterruptedError("STOP requested during Gemini Story Context fallback")
@@ -1594,7 +1593,7 @@ SOURCE CHUNK {i}/{len(batches)}:
                         time.sleep(attempt * 1.5)
         if data is None:
             raise RuntimeError(
-                f"MiMo နှင့် Gemini Story Context နှစ်ခုလုံး chunk {i}/{len(batches)} မအောင်မြင်ပါ။ "
+                f"GLM နှင့် Gemini Story Context နှစ်ခုလုံး chunk {i}/{len(batches)} မအောင်မြင်ပါ။ "
                 f"ဘာသာပြန်မှုကို မစတင်ပါ။ နောက်ဆုံးအမှား: {last_error}"
             ) from last_error
 
@@ -1614,7 +1613,7 @@ SOURCE CHUNK {i}/{len(batches)}:
         }
         if checkpoint_path:
             _atomic_json(checkpoint_path, {
-                "version": 3, "planner_mode": PLANNER_MODE,
+                "version": 4, "planner_mode": PLANNER_MODE,
                 "source_fingerprint": source_fingerprint,
                 "completed_batches": i, "total_batches": len(batches), "context": memory,
             })
@@ -1684,8 +1683,8 @@ def translate_batch(
     log: LogFn,
     _split_depth: int = 0,
     source_language: str = "English",
-    mimo_api_key: str = "",
-    mimo_model: str = "mimo-v2.6-flash",
+    glm_api_key: str = "",
+    glm_model: str = "glm-4.7-flash",
 ) -> list[dict[str, Any]]:
     task_rules = """
 You are a CONTEXT-AWARE BURMESE NARRATION TRANSLATOR.
@@ -1758,7 +1757,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             return translated
         except GeminiKeyPoolExhaustedError as exc:
             last = exc
-            log(f"⚠️ Gemini fallback chain exhausted for this batch; trying MiMo fallback: {exc}")
+            log(f"⚠️ Gemini fallback chain exhausted for this batch; trying GLM fallback: {exc}")
             break
         except Exception as exc:
             last = exc
@@ -1771,15 +1770,15 @@ CRITICAL OUTPUT ID PROTOCOL:
                 "Do not omit the final ID, renumber rows, or merge adjacent IDs."
             )
 
-    if mimo_api_key:
-        # MiMo receives the exact same translator prompt and validation contract as Gemini.
+    if glm_api_key:
+        # GLM receives the exact same translator prompt and validation contract as Gemini.
         fallback_prompt = prompt
         for fallback_attempt in range(1, 3):
             try:
-                log(f"🛟 MiMo translation fallback attempt {fallback_attempt}/2 for IDs "
+                log(f"🛟 GLM translation fallback attempt {fallback_attempt}/2 for IDs "
                     f"{int(current[0]['id']):05d}-{int(current[-1]['id']):05d}")
-                fallback_payload = _mimo_chat_json(
-                    mimo_api_key, fallback_prompt, model=mimo_model
+                fallback_payload = _glm_chat_json(
+                    glm_api_key, fallback_prompt, model=glm_model
                 )
                 return _validate_translation_candidate(
                     current, fallback_payload, story_context=story_context,
@@ -1787,7 +1786,7 @@ CRITICAL OUTPUT ID PROTOCOL:
                 )
             except Exception as fallback_exc:
                 last = fallback_exc
-                log(f"⚠️ MiMo translation fallback {fallback_attempt}/2 failed: {fallback_exc}")
+                log(f"⚠️ GLM translation fallback {fallback_attempt}/2 failed: {fallback_exc}")
                 fallback_prompt += f"\\n\\nCORRECTION REQUIRED: {fallback_exc}. Return the entire batch again."
 
     # V26 translation-ID resilience: V23's short local-sync segmentation creates many
@@ -1819,7 +1818,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
-            mimo_api_key=mimo_api_key, mimo_model=mimo_model,
+            glm_api_key=glm_api_key, glm_model=glm_model,
         )
         right_prev = (list(previous_context or []) + translated_left)[-context_limit:]
         translated_right = translate_batch(
@@ -1831,7 +1830,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             log=log,
             _split_depth=_split_depth + 1,
             source_language=source_language,
-            mimo_api_key=mimo_api_key, mimo_model=mimo_model,
+            glm_api_key=glm_api_key, glm_model=glm_model,
         )
         combined = translated_left + translated_right
         _assert_no_adjacent_translation_duplicates(combined, list(previous_context or []))
@@ -1849,8 +1848,8 @@ def audit_and_repair_batch(
     previous_context: list[dict[str, Any]] | None = None,
     next_context: list[dict[str, Any]] | None = None,
     log: LogFn,
-    mimo_api_key: str = "",
-    mimo_model: str = "mimo-v2.6-flash",
+    glm_api_key: str = "",
+    glm_model: str = "glm-4.7-flash",
 ) -> list[dict[str, Any]]:
     """Mandatory per-ID ownership/completeness audit; only failed rows may be rewritten.
 
@@ -1916,7 +1915,7 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
         last_error: Exception | None = None
         provider = "gemini"
         gemini_attempts = 0
-        mimo_attempts = 0
+        glm_attempts = 0
         for attempt in range(1, 5):
             try:
                 if provider == "gemini":
@@ -1925,10 +1924,10 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
                         ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA
                     )
                 else:
-                    mimo_attempts += 1
+                    glm_attempts += 1
                     audit_prompt = prompt + "\\n\\nGemini is unavailable. You are the fallback auditor. "
                     audit_prompt += "Return the same strict JSON checks structure and preserve every original translation unless repair is necessary."
-                    payload = _mimo_chat_json(mimo_api_key, audit_prompt, model=mimo_model)
+                    payload = _glm_chat_json(glm_api_key, audit_prompt, model=glm_model)
                 checks = payload.get("checks") if isinstance(payload, dict) else None
                 if not isinstance(checks, list):
                     raise ValueError("audit response must contain a checks array")
@@ -1964,21 +1963,21 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
                 return audited
             except GeminiKeyPoolExhaustedError as exc:
                 last_error = exc
-                if provider == "gemini" and mimo_api_key:
-                    provider = "mimo"
+                if provider == "gemini" and glm_api_key:
+                    provider = "glm"
                     prefix = "   " * depth
-                    log(f"{prefix}🛟 Gemini audit fallback exhausted; switching this audit batch to MiMo.")
+                    log(f"{prefix}🛟 Gemini audit fallback exhausted; switching this audit batch to GLM.")
                     continue
                 raise
             except Exception as exc:
                 last_error = exc
                 prefix = "   " * depth
                 log(f"{prefix}⚠️ Sentence-lock audit attempt {attempt}/4 failed ({provider}): {exc}")
-                if provider == "gemini" and gemini_attempts >= 2 and mimo_api_key:
-                    provider = "mimo"
-                    log(f"{prefix}🛟 Gemini audit retries failed; switching this audit batch to MiMo.")
+                if provider == "gemini" and gemini_attempts >= 2 and glm_api_key:
+                    provider = "glm"
+                    log(f"{prefix}🛟 Gemini audit retries failed; switching this audit batch to GLM.")
                     prompt = base_prompt
-                elif provider == "mimo" and mimo_attempts >= 2:
+                elif provider == "glm" and glm_attempts >= 2:
                     break
                 else:
                     prompt = (
@@ -2228,7 +2227,7 @@ class RecapPlanBuilder:
         state_file = job_dir / "planner_checkpoint.json"
         fp = _source_fingerprint_for_mode(
             source, PLANNER_MODE + "|" + direction + f"|whisper:{whisper_model}:{whisper_language}")
-        # Keep existing local Whisper transcripts when upgrading an older job to MiMo Story Context.
+        # Keep existing local Whisper transcripts when upgrading an older job to GLM Story Context.
         legacy_transcript_fp = _source_fingerprint_for_mode(
             source, "timestamp_translation_en_to_mm_narrator_v3_quality|" + direction
             + f"|whisper:{whisper_model}:{whisper_language}")
@@ -2276,7 +2275,7 @@ class RecapPlanBuilder:
             load_dotenv(env_file, override=True)
             self.log(f"🔑 Gemini .env loaded: {env_file}")
             env_values = dotenv_values(env_file)
-            mimo_api_key = str(env_values.get("MIMO_API_KEY") or os.getenv("MIMO_API_KEY") or "").strip()
+            glm_api_key = str(env_values.get("GLM_API_KEY") or os.getenv("GLM_API_KEY") or "").strip()
             seen_keys: set[str] = set()
             # Every GEMINI_IMAGE_PROJECT_<N>_KEY in numeric order, else GEMINI_API_KEY.
             numbers = sorted(
@@ -2293,13 +2292,13 @@ class RecapPlanBuilder:
                 if key:
                     key_pool.append(("GEMINI_API_KEY", key))
         if not env_file or not env_file.is_file():
-            mimo_api_key = str(os.getenv("MIMO_API_KEY") or "").strip()
+            glm_api_key = str(os.getenv("GLM_API_KEY") or "").strip()
         if not key_pool:
             inherited_key = str(os.getenv("GEMINI_API_KEY") or "").strip()
             if inherited_key:
                 key_pool.append(("GEMINI_API_KEY", inherited_key))
-        mimo_model = str((env_values.get("MIMO_STORY_CONTEXT_MODEL") if env_file and env_file.is_file() else "") or os.getenv("MIMO_STORY_CONTEXT_MODEL") or "mimo-v2.6-pro").strip()
-        mimo_fallback_model = str((env_values.get("MIMO_TRANSLATION_FALLBACK_MODEL") if env_file and env_file.is_file() else "") or os.getenv("MIMO_TRANSLATION_FALLBACK_MODEL") or "mimo-v2.6-flash").strip()
+        glm_model = str((env_values.get("GLM_STORY_CONTEXT_MODEL") if env_file and env_file.is_file() else "") or os.getenv("GLM_STORY_CONTEXT_MODEL") or "glm-4.7-flash").strip()
+        glm_fallback_model = str((env_values.get("GLM_TRANSLATION_FALLBACK_MODEL") if env_file and env_file.is_file() else "") or os.getenv("GLM_TRANSLATION_FALLBACK_MODEL") or "glm-4.7-flash").strip()
         if not key_pool:
             raise RuntimeError(
                 "Gemini API key မတွေ့ပါ။ .env ထဲမှာ GEMINI_API_KEY=... "
@@ -2410,8 +2409,8 @@ class RecapPlanBuilder:
             )
 
             self.progress(1, 4, "Story context memory")
-            self.log(f"🧠 [2/4] Story Context — MiMo primary ({mimo_model}), Gemini fallback ({self.gemini_text_model})...")
-            context_source_fp = fp + "|seg:" + segmentation_profile + "|mimo:" + mimo_model + "|gemini:" + str(self.gemini_text_model)
+            self.log(f"🧠 [2/4] Story Context — GLM primary ({glm_model}), Gemini fallback ({self.gemini_text_model})...")
+            context_source_fp = fp + "|seg:" + segmentation_profile + "|glm:" + glm_model + "|gemini:" + str(self.gemini_text_model)
             story_context = build_story_context(
                 ai, units,
                 batch_max_items=self.story_context_batch_max_items,
@@ -2420,8 +2419,8 @@ class RecapPlanBuilder:
                 checkpoint_path=context_checkpoint_file,
                 source_fingerprint=context_source_fp,
                 reuse=reuse,
-                mimo_api_key=mimo_api_key,
-                mimo_model=mimo_model,
+                glm_api_key=glm_api_key,
+                glm_model=glm_model,
                 source_language=language_name,
             )
             _atomic_json(context_file, {
@@ -2430,7 +2429,7 @@ class RecapPlanBuilder:
                 "context": story_context,
             })
 
-            self.log("📚 Gemini receives the complete Story Context memory (MiMo-built or Gemini-fallback) and canonical Burmese name glossary in every translation batch.")
+            self.log("📚 Gemini receives the complete Story Context memory (GLM-built or Gemini-fallback) and canonical Burmese name glossary in every translation batch.")
             self.progress(2, 4, "Timestamp translation")
             self.log(f"🌐 [3/4] Gemini {language_name} → Myanmar translation — narrator source | V2 Smart Sync | no summary / no shortening...")
             batches = _batch_by_size(units, max_items=self.translation_batch_max_items, max_chars=16000)
@@ -2529,7 +2528,7 @@ class RecapPlanBuilder:
                         next_context=nxt,
                         log=self.log,
                         source_language=language_name,
-                        mimo_api_key=mimo_api_key, mimo_model=mimo_fallback_model,
+                        glm_api_key=glm_api_key, glm_model=glm_fallback_model,
                     )
                 except GeminiKeyPoolExhaustedError as exc:
                     saved = len(translated_all)
@@ -2547,8 +2546,8 @@ class RecapPlanBuilder:
                         previous_context=prev,
                         next_context=nxt,
                         log=self.log,
-                        mimo_api_key=mimo_api_key,
-                        mimo_model=mimo_fallback_model,
+                        glm_api_key=glm_api_key,
+                        glm_model=glm_fallback_model,
                     )
                 # The audit may rewrite a line. Re-run any such row through the strict
                 # translator before it reaches the checkpoint or Myanmar TTS.
@@ -2560,7 +2559,7 @@ class RecapPlanBuilder:
                         ai, story_context=story_context, previous_context=prev,
                         current=english_rows, next_context=nxt, log=self.log,
                         source_language=language_name,
-                        mimo_api_key=mimo_api_key, mimo_model=mimo_fallback_model,
+                        glm_api_key=glm_api_key, glm_model=glm_fallback_model,
                     )
                     repaired_by_id = {int(row["id"]): row for row in repaired_rows}
                     translated = [repaired_by_id.get(int(row["id"]), row) for row in translated]

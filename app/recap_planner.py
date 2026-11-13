@@ -1326,6 +1326,48 @@ def _glm_chat_json(
     return parsed
 
 
+
+def _azure_foundry_chat_json(
+    api_key: str, endpoint: str, deployment: str, prompt: str, *, timeout_seconds: int = 180
+) -> Any:
+    """Call a Microsoft Foundry OpenAI-compatible v1 chat-completions deployment."""
+    key, base, model = str(api_key or "").strip(), str(endpoint or "").strip().rstrip("/"), str(deployment or "").strip()
+    if not key:
+        raise RuntimeError("AZURE_AI_FOUNDRY_API_KEY မတွေ့ပါ။")
+    if not base or not model:
+        raise RuntimeError("Azure AI Foundry endpoint နဲ့ deployment name လိုအပ်ပါတယ်။")
+    if base.endswith("/openai/v1"):
+        pass
+    elif base.endswith("/openai"):
+        base += "/v1"
+    else:
+        base += "/openai/v1"
+    response = requests.post(
+        base + "/chat/completions",
+        headers={"api-key": key, "Content-Type": "application/json"},
+        json={"model": model, "messages": [
+            {"role": "system", "content": "You are a precise assistant. Follow the requested output format exactly. Return valid JSON only."},
+            {"role": "user", "content": prompt}],
+            "max_tokens": 24000, "temperature": 0.2, "stream": False},
+        timeout=max(30, min(int(timeout_seconds), 600)),
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Azure AI Foundry HTTP {response.status_code}: {(response.text or '')[:1200]}")
+    choices = response.json().get("choices") or []
+    if not choices:
+        raise RuntimeError("Azure AI Foundry returned no choices")
+    choice = choices[0] or {}
+    if choice.get("finish_reason") == "length":
+        raise RuntimeError("Azure AI Foundry response was truncated")
+    raw = str(((choice.get("message") or {}).get("content")) or "").strip()
+    if not raw:
+        raise RuntimeError("Azure AI Foundry returned an empty response")
+    parsed = _extract_json_payload(raw)
+    if not isinstance(parsed, dict):
+        raise RuntimeError("Azure AI Foundry response must be a JSON object")
+    return parsed
+
+
 def _validate_translation_candidate(
     current: list[dict[str, Any]],
     payload: Any,
@@ -1472,12 +1514,15 @@ def build_story_context(
     reuse: bool = True,
     glm_api_key: str = "",
     glm_model: str = "glm-4.7-flash",
+    azure_api_key: str = "",
+    azure_endpoint: str = "",
+    azure_deployment: str = "",
     source_language: str = "Chinese",
 ) -> dict[str, Any]:
-    """GLM builds movie-wide context first; Gemini is the fallback context builder."""
-    use_glm = bool(str(glm_api_key or "").strip())
-    if not use_glm:
-        log("⚠️ GLM_API_KEY မရှိပါ — Story Context ကို Gemini နဲ့ တည်ဆောက်မယ်။")
+    """Azure AI Foundry builds movie-wide context first; Gemini is the fallback context builder."""
+    use_azure = bool(str(azure_api_key or "").strip() and str(azure_endpoint or "").strip() and str(azure_deployment or "").strip())
+    if not use_azure:
+        log("⚠️ Azure AI Foundry credentials မပြည့်စုံပါ — Story Context ကို Gemini နဲ့ တည်ဆောက်မယ်။")
     batches = _batch_by_size(units, max_items=batch_max_items, max_chars=24000)
     memory: dict[str, Any] = {
         "characters": [], "relationships": [], "places": [], "terms": [],
@@ -1549,28 +1594,28 @@ SOURCE CHUNK {i}/{len(batches)}:
 """
         last_error = None
         data = None
-        context_provider = "GLM"
+        context_provider = "Azure AI Foundry"
         required = ("characters", "relationships", "places", "terms", "plot_state",
                     "name_consistency", "name_glossary", "unresolved")
-        if use_glm:
+        if use_azure:
             for attempt in range(1, 4):
                 try:
-                    data = _glm_chat_json(glm_api_key, prompt, model=glm_model)
+                    data = _azure_foundry_chat_json(azure_api_key, azure_endpoint, azure_deployment, prompt)
                     if any(not isinstance(data.get(k), list) for k in required):
-                        raise ValueError("GLM Story Context JSON is missing required list fields")
-                    log(f"🧠 GLM Story Context {i}/{len(batches)} completed")
+                        raise ValueError("Azure AI Foundry Story Context JSON is missing required list fields")
+                    log(f"🧠 Azure AI Foundry Story Context {i}/{len(batches)} completed")
                     break
                 except InterruptedError:
                     raise
                 except Exception as exc:
                     data = None
                     last_error = exc
-                    log(f"⚠️ GLM Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
+                    log(f"⚠️ Azure AI Foundry Story Context {i}/{len(batches)} attempt {attempt}/3 failed: {str(exc)[:180]}")
                     if attempt < 3:
                         time.sleep(attempt * 1.5)
         if data is None:
             context_provider = "Gemini fallback"
-            log(f"🛟 GLM Story Context unavailable for chunk {i}; Gemini is taking over this context chunk.")
+            log(f"🛟 Azure AI Foundry Story Context unavailable for chunk {i}; Gemini is taking over this context chunk.")
             for attempt in range(1, 4):
                 if should_stop():
                     raise InterruptedError("STOP requested during Gemini Story Context fallback")
@@ -1593,7 +1638,7 @@ SOURCE CHUNK {i}/{len(batches)}:
                         time.sleep(attempt * 1.5)
         if data is None:
             raise RuntimeError(
-                f"GLM နှင့် Gemini Story Context နှစ်ခုလုံး chunk {i}/{len(batches)} မအောင်မြင်ပါ။ "
+                f"Azure AI Foundry နှင့် Gemini Story Context နှစ်ခုလုံး chunk {i}/{len(batches)} မအောင်မြင်ပါ။ "
                 f"ဘာသာပြန်မှုကို မစတင်ပါ။ နောက်ဆုံးအမှား: {last_error}"
             ) from last_error
 
@@ -1685,6 +1730,9 @@ def translate_batch(
     source_language: str = "English",
     glm_api_key: str = "",
     glm_model: str = "glm-4.7-flash",
+    azure_api_key: str = "",
+    azure_endpoint: str = "",
+    azure_deployment: str = "",
 ) -> list[dict[str, Any]]:
     task_rules = """
 You are a CONTEXT-AWARE BURMESE NARRATION TRANSLATOR.
@@ -1744,6 +1792,26 @@ CRITICAL OUTPUT ID PROTOCOL:
 {json.dumps([int(x["id"]) for x in current], ensure_ascii=False)}
 - Before responding, verify that items[].id exactly equals that sequence.
 """
+    # Azure AI Foundry is the primary translator for this test branch.
+    if azure_api_key and azure_endpoint and azure_deployment:
+        azure_prompt = prompt
+        for azure_attempt in range(1, 4):
+            try:
+                log(f"☁️ Azure AI Foundry translation primary attempt {azure_attempt}/3 for IDs "
+                    f"{int(current[0]['id']):05d}-{int(current[-1]['id']):05d}")
+                azure_payload = _azure_foundry_chat_json(
+                    azure_api_key, azure_endpoint, azure_deployment, azure_prompt
+                )
+                return _validate_translation_candidate(
+                    current, azure_payload, story_context=story_context,
+                    previous_context=previous_context, next_context=next_context, log=log,
+                )
+            except Exception as azure_exc:
+                log(f"⚠️ Azure AI Foundry translation attempt {azure_attempt}/3 failed: {azure_exc}")
+                azure_prompt += f"\n\nCORRECTION REQUIRED: {azure_exc}. Return the entire batch again."
+                if azure_attempt < 3:
+                    time.sleep(1.2 * azure_attempt)
+
     last: Exception | None = None
     for attempt in range(1, 5):
         try:
@@ -1819,6 +1887,7 @@ CRITICAL OUTPUT ID PROTOCOL:
             _split_depth=_split_depth + 1,
             source_language=source_language,
             glm_api_key=glm_api_key, glm_model=glm_model,
+            azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_deployment,
         )
         right_prev = (list(previous_context or []) + translated_left)[-context_limit:]
         translated_right = translate_batch(
@@ -2274,6 +2343,7 @@ class RecapPlanBuilder:
         ai_mod = _load_module("timestamp_ai_service", self.runtime_root / "services" / "ai_service.py")
 
         env_file = self.gemini_env_path
+        env_values = {}
         key_pool: list[tuple[str, str]] = []
         if env_file and env_file.is_file():
             from dotenv import dotenv_values, load_dotenv
@@ -2298,6 +2368,10 @@ class RecapPlanBuilder:
                     key_pool.append(("GEMINI_API_KEY", key))
         if not env_file or not env_file.is_file():
             glm_api_key = str(os.getenv("GLM_API_KEY") or "").strip()
+        azure_api_key = str((env_values.get("AZURE_AI_FOUNDRY_API_KEY") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_API_KEY") or "").strip()
+        azure_endpoint = str((env_values.get("AZURE_AI_FOUNDRY_ENDPOINT") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_ENDPOINT") or "").strip()
+        azure_story_deployment = str((env_values.get("AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT") or "").strip()
+        azure_translation_deployment = str((env_values.get("AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT") if env_file and env_file.is_file() else "") or os.getenv("AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT") or "").strip()
         if not key_pool:
             inherited_key = str(os.getenv("GEMINI_API_KEY") or "").strip()
             if inherited_key:
@@ -2414,7 +2488,7 @@ class RecapPlanBuilder:
             )
 
             self.progress(1, 4, "Story context memory")
-            self.log(f"🧠 [2/4] Story Context — GLM primary ({glm_model}), Gemini fallback ({self.gemini_text_model})...")
+            self.log(f"🧠 [2/4] Story Context — Azure AI Foundry primary ({azure_story_deployment or "not configured"}), Gemini fallback ({self.gemini_text_model})...")
             context_source_fp = fp + "|seg:" + segmentation_profile + "|glm:" + glm_model + "|gemini:" + str(self.gemini_text_model)
             story_context = build_story_context(
                 ai, units,
@@ -2426,6 +2500,7 @@ class RecapPlanBuilder:
                 reuse=reuse,
                 glm_api_key=glm_api_key,
                 glm_model=glm_model,
+                azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_story_deployment,
                 source_language=language_name,
             )
             _atomic_json(context_file, {
@@ -2434,9 +2509,9 @@ class RecapPlanBuilder:
                 "context": story_context,
             })
 
-            self.log("📚 Gemini receives the complete Story Context memory (GLM-built or Gemini-fallback) and canonical Burmese name glossary in every translation batch.")
+            self.log("📚 Translation provider receives the complete Story Context memory and canonical Burmese name glossary in every batch.")
             self.progress(2, 4, "Timestamp translation")
-            self.log(f"🌐 [3/4] Gemini {language_name} → Myanmar translation — narrator source | V2 Smart Sync | no summary / no shortening...")
+            self.log(f"🌐 [3/4] Azure AI Foundry {language_name} → Myanmar translation primary; Gemini and GLM fallback — narrator source | no summary / no shortening...")
             batches = _batch_by_size(units, max_items=self.translation_batch_max_items, max_chars=16000)
             translated_all: list[dict[str, Any]] = []
             if reuse and translations_file.is_file():
@@ -2534,6 +2609,7 @@ class RecapPlanBuilder:
                         log=self.log,
                         source_language=language_name,
                         glm_api_key=glm_api_key, glm_model=glm_fallback_model,
+                        azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                 except GeminiKeyPoolExhaustedError as exc:
                     saved = len(translated_all)
@@ -2553,6 +2629,7 @@ class RecapPlanBuilder:
                         log=self.log,
                         glm_api_key=glm_api_key,
                         glm_model=glm_fallback_model,
+                        azure_api_key=azure_api_key, azure_endpoint=azure_endpoint, azure_deployment=azure_translation_deployment,
                     )
                 # The audit may rewrite a line. Re-run any such row through the strict
                 # translator before it reaches the checkpoint or Myanmar TTS.

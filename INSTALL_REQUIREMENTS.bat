@@ -72,16 +72,22 @@ if errorlevel 1 (
 )
 
 echo Waiting for Ollama service...
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0; $i -lt 45; $i++){ try { Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 http://127.0.0.1:11434/api/tags ^| Out-Null; $ready=$true; break } catch { Start-Sleep -Seconds 2 } }; if(-not $ready){ Write-Error 'Ollama service did not become ready on 127.0.0.1:11434'; exit 1 }"
+rem Avoid a caret-escaped pipe here: it can be passed literally to PowerShell and break every readiness check.
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -Command "$ready=$false; for($i=0; $i -lt 45; $i++){ try { $tags=Invoke-RestMethod -TimeoutSec 3 http://127.0.0.1:11434/api/tags; $ready=$true; break } catch { Start-Sleep -Seconds 2 } }; if(-not $ready){ Write-Error 'Ollama service did not become ready on 127.0.0.1:11434'; exit 1 }; $names=@($tags.models | ForEach-Object { $_.name }); if($names -contains 'qwen3:4b'){ Write-Host 'Qwen3:4b is already installed; skipping download.'; exit 0 } else { Write-Host 'Qwen3:4b is not installed yet; it will be downloaded.'; exit 2 }"
+if errorlevel 2 goto :pull_qwen
 if errorlevel 1 exit /b 1
+goto :verify_qwen
 
-echo Downloading Qwen3:4b. This download is several GB and may take time...
+:pull_qwen
+echo Downloading Qwen3:4b because it is not installed yet...
 "%OLLAMA_EXE%" pull qwen3:4b
 if errorlevel 1 exit /b 1
 
+:verify_qwen
 echo Verifying qwen3:4b...
 "%OLLAMA_EXE%" show qwen3:4b >nul 2>nul
 if errorlevel 1 exit /b 1
+echo Ollama and Qwen3:4b are ready.
 exit /b 0
 
 :ffmpeg_fail

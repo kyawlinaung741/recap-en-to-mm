@@ -1295,7 +1295,7 @@ class OllamaTranslationClient:
     """Local Ollama JSON translator. Gemini remains responsible for story context and translation audit."""
 
     def __init__(self, base_url: str = "http://127.0.0.1:11434", model: str = "qwen3:4b",
-                 timeout_seconds: int = 240):
+                 timeout_seconds: int = 600):
         self.base_url = str(base_url or "http://127.0.0.1:11434").rstrip("/")
         self.model = str(model or "qwen3:4b").strip()
         self.timeout_seconds = max(30, min(int(timeout_seconds), 900))
@@ -2302,6 +2302,9 @@ class RecapPlanBuilder:
         plan["source_language"] = whisper_language
         plan["target_language"] = "mm"
         plan["translation_batch_count"] = len(batches)
+        plan["translation_provider"] = "ollama"
+        plan["translation_model"] = self.ollama_model
+        plan["translation_quality_control"] = "gemini_story_context_and_audit"
         plan["atomic_unit_count"] = len(translated_all)
         plan["translation_rules"] = {
             "task": "translate",

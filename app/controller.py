@@ -1093,7 +1093,7 @@ class App(tk.Tk):
             self.gemini_env.set(p)
 
     def _manage_gemini_keys(self) -> None:
-        """Manage Gemini keys and GLM credentials/models in separate UI sections."""
+        """Manage Gemini, GLM, and Azure AI Foundry credentials/models."""
         env_path = Path(self.gemini_env.get().strip() or (ROOT_DIR / ".env")).expanduser()
         try:
             raw_env = env_path.read_text(encoding="utf-8") if env_path.is_file() else ""
@@ -1108,8 +1108,12 @@ class App(tk.Tk):
         # Keep the original single-key setting visible and writable for backward compatibility.
         gemini_key_names = ["GEMINI_API_KEY", *[f"GEMINI_IMAGE_PROJECT_{i}_KEY" for i in range(1, 4)]]
         glm_key_names = ["GLM_API_KEY"]
+        azure_names = [
+            "AZURE_AI_FOUNDRY_API_KEY", "AZURE_AI_FOUNDRY_ENDPOINT",
+            "AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT", "AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT",
+        ]
         model_names = ["GLM_STORY_CONTEXT_MODEL", "GLM_TRANSLATION_FALLBACK_MODEL"]
-        managed_names = set(gemini_key_names + glm_key_names + model_names + ["MIMO_API_KEY", "MIMO_STORY_CONTEXT_MODEL", "MIMO_TRANSLATION_FALLBACK_MODEL", "MIMO_PROXY"])
+        managed_names = set(gemini_key_names + glm_key_names + azure_names + model_names + ["MIMO_API_KEY", "MIMO_STORY_CONTEXT_MODEL", "MIMO_TRANSLATION_FALLBACK_MODEL", "MIMO_PROXY"])
         current: dict[str, str] = {}
         for line in existing_lines:
             stripped = line.strip()
@@ -1176,10 +1180,28 @@ class App(tk.Tk):
         ttk.Combobox(body, textvariable=translation_model_var, values=model_options, state="readonly", width=38).grid(
             row=13, column=1, sticky="ew", pady=4)
 
-        ttk.Label(body, text="အကွက်ဗလာထားရင် သက်ဆိုင်ရာ API Key ကို .env မှ ဖယ်ရှားပါမယ်။\\n"
-                             "Model နှစ်ခုကို သီးခြားရွေးနိုင်ပြီး Save လုပ်ပြီးနောက် START / RESUME မှာ အသုံးပြုပါမယ်။",
+        ttk.Separator(body, orient="horizontal").grid(
+            row=14, column=0, columnspan=2, sticky="ew", pady=(12, 10))
+        ttk.Label(body, text="Azure AI Foundry — Primary Provider", font=("Segoe UI Semibold", 12)).grid(
+            row=15, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        ttk.Label(body, text="Azure Foundry Resource API Key နဲ့ Endpoint ကို ထည့်ပါ။ Deployment name က Foundry ထဲမှာ သင်သတ်မှတ်ထားတဲ့ နာမည်ဖြစ်ပါတယ်။",
+                  style="Muted.TLabel", wraplength=540).grid(
+            row=16, column=0, columnspan=2, sticky="w", pady=(0, 6))
+        ttk.Label(body, text="Azure API Key").grid(row=17, column=0, sticky="w", padx=(0, 12), pady=4)
+        azure_key_var = tk.StringVar(value=current.get("AZURE_AI_FOUNDRY_API_KEY", ""))
+        ttk.Entry(body, textvariable=azure_key_var, width=62, show="*").grid(row=17, column=1, sticky="ew", pady=4)
+        ttk.Label(body, text="Endpoint URL").grid(row=18, column=0, sticky="w", padx=(0, 12), pady=4)
+        azure_endpoint_var = tk.StringVar(value=current.get("AZURE_AI_FOUNDRY_ENDPOINT", ""))
+        ttk.Entry(body, textvariable=azure_endpoint_var, width=62).grid(row=18, column=1, sticky="ew", pady=4)
+        ttk.Label(body, text="Story Context Deployment").grid(row=19, column=0, sticky="w", padx=(0, 12), pady=4)
+        azure_story_var = tk.StringVar(value=current.get("AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT", ""))
+        ttk.Entry(body, textvariable=azure_story_var, width=38).grid(row=19, column=1, sticky="ew", pady=4)
+        ttk.Label(body, text="Translation Deployment").grid(row=20, column=0, sticky="w", padx=(0, 12), pady=4)
+        azure_translation_var = tk.StringVar(value=current.get("AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT", ""))
+        ttk.Entry(body, textvariable=azure_translation_var, width=38).grid(row=20, column=1, sticky="ew", pady=4)
+        ttk.Label(body, text="Azure credentials မပြည့်စုံပါက Gemini fallback ကို အသုံးပြုပါမယ်။ GLM ကို Translation fallback အဖြစ် ဆက်ထားပါတယ်။",
                   style="Muted.TLabel", wraplength=540, justify="left").grid(
-            row=14, column=0, columnspan=2, sticky="w", pady=(12, 12))
+            row=21, column=0, columnspan=2, sticky="w", pady=(12, 12))
 
         def save_keys() -> None:
             values = {
@@ -1187,6 +1209,10 @@ class App(tk.Tk):
                 "GLM_API_KEY": glm_key_var.get().strip(),
                 "GLM_STORY_CONTEXT_MODEL": story_model_var.get().strip() or "glm-4.7-flash",
                 "GLM_TRANSLATION_FALLBACK_MODEL": translation_model_var.get().strip() or "glm-4.7-flash",
+                "AZURE_AI_FOUNDRY_API_KEY": azure_key_var.get().strip(),
+                "AZURE_AI_FOUNDRY_ENDPOINT": azure_endpoint_var.get().strip(),
+                "AZURE_AI_FOUNDRY_STORY_CONTEXT_DEPLOYMENT": azure_story_var.get().strip(),
+                "AZURE_AI_FOUNDRY_TRANSLATION_DEPLOYMENT": azure_translation_var.get().strip(),
             }
             preserved = []
             for line in existing_lines:
@@ -1220,7 +1246,7 @@ class App(tk.Tk):
             )
 
         buttons = ttk.Frame(body)
-        buttons.grid(row=15, column=0, columnspan=2, sticky="e")
+        buttons.grid(row=22, column=0, columnspan=2, sticky="e")
         ttk.Button(buttons, text="Cancel", command=dialog.destroy).pack(side="right", padx=(6, 0))
         ttk.Button(buttons, text="Save Keys & Models", style="Accent.TButton", command=save_keys).pack(side="right")
         dialog.update_idletasks()

@@ -1,7 +1,7 @@
 # Recap → Myanmar (+ Splitter)
 
 **English၊ တရုတ်၊ ဟိန္ဒီ၊ ကိုရီးယား … ဘာသာစကားမျိုးစုံနဲ့ ပြောထားတဲ့ ဇာတ်လမ်း/Recap video ကို မြန်မာ Narrator အသံနဲ့ ပြန်လည်တင်ဆက်ပေးတဲ့ Windows tool**
-Myanmar story narration · Whisper + Gemini Story Context/Translation + Gemini fallback · Edge TTS / Gemini TTS · Smart Sync
+Myanmar story narration · Whisper + Gemini Story Context · Gemini or NLLB-200 Local Translation · Edge TTS / Gemini TTS · Smart Sync
 **Splitter** tab — ရှည်တဲ့ video ကို မိနစ်အလိုက် အပိုင်းခွဲ (Ratio + blur နောက်ခံ၊ စာ၊ Part နံပါတ်)
 
  > English: turns a story/recap video into natural Burmese narrator-style storytelling. Gemini preserves the plot,
@@ -19,7 +19,7 @@ Myanmar story narration · Whisper + Gemini Story Context/Translation + Gemini f
    - ဟိန္ဒီနဲ့ Urdu က အသံတူလို့ Auto-detect မှာ Urdu ထွက်ရင် ဟိန္ဒီအဖြစ် ရေးတယ်။
 2. **အပိုင်းခွဲ** — စာကြောင်း၊ သဘာဝကျတဲ့ စကားစုနဲ့ အသံရပ်တဲ့နေရာတွေကို အခြေခံပြီး sync unit ခွဲတယ်။ စာကြောင်းရှည်ရင် အသက်ရှူရပ်နားလို့ သင့်တဲ့ နေရာမှာ ခွဲပေးတယ်။
 3. **ဇာတ်လမ်း မှတ်ဉာဏ်** — Gemini က Whisper transcript တစ်ကားလုံးကို အပိုင်းလိုက်ဖတ်ပြီး ဇာတ်ကောင်၊ ဆက်နွယ်မှု၊ မူရင်းနာမည်၊ တရုတ် Pinyin၊ မြန်မာအသံထွက် Canonical Name Glossary နဲ့ ဇာတ်လမ်းနောက်ခံကို တည်ဆောက်တယ်။
-4. **ဘာသာပြန်** — Gemini က Story Context Memory ကို batch တိုင်းမှာ ကိုးကားပြီး မြန်မာ Narrator ပုံစံနဲ့ ဦးဆောင်ဘာသာပြန်တယ်။ Azure မအောင်မြင်ပါက Gemini ကို fallback အဖြစ် သုံးတယ်။
+4. **ဘာသာပြန်** — Translation Engine မှာ Gemini (API) သို့မဟုတ် NLLB-200 (Local) ကို ရွေးနိုင်တယ်။ NLLB ရွေးထားရင် timestamp translation ကို ကိုယ့်စက်ထဲမှာပဲ လုပ်ပြီး API translation request မပို့ဘူး။ Story Context တည်ဆောက်ဖို့တော့ Gemini API key လိုသေးတယ်။ Glossary ထဲက သိပြီးသား ဇာတ်ကောင်နာမည်တွေကို placeholder နဲ့ကာကွယ်ပြီး ပြန်ထည့်တယ်။
    - မူရင်းဇာတ်လမ်းရဲ့ အချက်အလက်၊ အစဉ်လိုက်ဖြစ်စဉ်၊ ဇာတ်ကောင်နာမည်နဲ့ ဆက်နွယ်မှုတွေကို ထိန်းထားပြီး သဘာဝကျတဲ့ မြန်မာဇာတ်ကြောင်းပြောပုံစံ သုံးတယ်။ Direct Dub ပုံစံ မဟုတ်ဘူး။
    - A/B/C/S အဆင့်သတ်မှတ်ချက်တွေကို subtitle စာသားမှာ မူရင်းအတိုင်း ထိန်းပြီး Narrator ဖတ်တဲ့အခါမှ အေ/ဘီ/စီ/အက်စ် အဆင့်လို့ အသံထွက်ပြောင်းပေးတယ်။
    - နံပါတ်နဲ့ ရာခိုင်နှုန်းတွေကို မြန်မာစကားပြောပုံစံအဖြစ် ပြောင်းပြီး `%` ကို ရာခိုင်နှုန်း၊ `&` ကို နှင့် လို့ ပြောင်းပေးတယ်။
@@ -39,7 +39,8 @@ Myanmar story narration · Whisper + Gemini Story Context/Translation + Gemini f
 | Windows | 10 / 11 (64-bit) |
 | Python | **3.12, 64-bit** — [python.org](https://www.python.org/downloads/) ကနေ သွင်းပါ။ "Add python.exe to PATH" နဲ့ "tcl/tk" ကို အမှန်ခြစ်ပါ |
 | FFmpeg | `ffmpeg.exe` + `ffprobe.exe` — မရှိရင် `INSTALL_REQUIREMENTS.bat` က အလိုလို download လုပ်ပေးတယ် ([gyan.dev builds](https://www.gyan.dev/ffmpeg/builds/)) |
-| Gemini API key | အခမဲ့ ရတယ် — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| Gemini API key | Story Context အတွက် လိုအပ်တယ် — [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+| NLLB Local | PyTorch, Transformers, SentencePiece; ပထမဆုံးအကြိမ်မှာ Hugging Face က model (~2.4 GB) download လုပ်တယ် |
 | Internet | Gemini နဲ့ Edge TTS အတွက် |
 | NVIDIA GPU | မဖြစ်မနေ မလိုဘူး။ ရှိရင် Whisper နဲ့ video render ပိုမြန်တယ် (NVENC)။ မရှိရင် CPU နဲ့ အလိုလို လုပ်တယ် |
 
@@ -48,7 +49,7 @@ Myanmar story narration · Whisper + Gemini Story Context/Translation + Gemini f
 1. ဒီ repo ကို download လုပ်ပါ (**Code → Download ZIP** ပြီးရင် ဖြည်ပါ၊ သို့မဟုတ် `git clone`)။
 2. Python 3.12 ကို သွင်းပါ (အပေါ်က ဇယားကို ကြည့်ပါ)။
 3. **`INSTALL_REQUIREMENTS.bat`** ကို double-click နှိပ်ပါ။ အောက်ပါတွေကို သွင်းပေးပါမယ်:
-   - Python package တွေ
+   - Python package တွေ (NLLB အတွက် Transformers နဲ့ SentencePiece ပါဝင်တယ်; PyTorch ကို သီးခြားရှိထားရမယ်)
    - Title စာရေးဖို့ လိုတဲ့ Chromium
    - **FFmpeg** — စက်ထဲမှာ မရှိရင် (~100 MB) download လုပ်ပြီး ဒီ folder ထဲက `ffmpeg\` ထဲ ထည့်ပေးပါမယ်။ PATH ထဲ (သို့) `C:\ffmpeg\bin\` မှာ ရှိပြီးသားဆိုရင် အဲ့ဒါကိုပဲ သုံးပါတယ်။
 4. **`.env.example`** ကို **`.env`** လို့ copy ကူးပါ။ ပြီးရင် ဖွင့်ပြီး key ထည့်ပါ:
@@ -59,6 +60,14 @@ Myanmar story narration · Whisper + Gemini Story Context/Translation + Gemini f
 
 > ⚠️ `.env` ထဲမှာ ကိုယ့် key ရှိလို့ ဘယ်သူ့ကိုမှ မပို့ပါနဲ့၊ GitHub ပေါ်လည်း မတင်ပါနဲ့ (`.gitignore` ထဲမှာ ထည့်ထားပြီးသားပါ)။
 
+## NLLB-200 Local Translation (Experimental)
+
+- Model: `facebook/nllb-200-distilled-600M`; Chinese Simplified uses `zho_Hans`, Myanmar output uses `mya_Mymr`.
+- ပထမဆုံး NLLB run မှာ model ကို Hugging Face ကနေ download လုပ်ရမယ် (ခန့်မှန်း 2.4 GB)။ နောက်တစ်ခါတွေမှာ local cache ကနေ load လုပ်မယ်။
+- NLLB က timestamp translation ကို local လုပ်တယ်။ လက်ရှိ Story Context / character glossary တည်ဆောက်မှုက Gemini ကို ဆက်သုံးတဲ့အတွက် Gemini API key လိုသေးတယ်။
+- NLLB output အတွက် Gemini Translation Audit ကို မခေါ်ဘဲ ID, Burmese text, known-name checks တွေကို local စစ်တယ်။ မမှန်တဲ့ known character name ကို တွေ့ရင် TTS မပို့ဘဲ ရပ်မယ်။
+- NLLB model license သည် **CC-BY-NC-4.0 (non-commercial only)** ဖြစ်ပြီး model card က research use အတွက်သာ ရည်ရွယ်ထားကြောင်း ဖော်ပြထားတယ်။ စီးပွားဖြစ်အသုံးပြုမှုအတွက် မသုံးပါနှင့်။ [Model card](https://huggingface.co/facebook/nllb-200-distilled-600M)
+
 ## သုံးနည်း
 
 **`RUN.bat`** ကို double-click နှိပ်ပါ။ Window မှာ အကွက် ၃ ကွက် ပါပါတယ်။
@@ -66,7 +75,7 @@ Myanmar story narration · Whisper + Gemini Story Context/Translation + Gemini f
 | နေရာ | လုပ်ရမယ့်အရာ |
 |---|---|
 | အပေါ် | **Source Video → Browse** နဲ့ video ကို ရွေးပါ။ **Folder** နှိပ်ရင် folder ထဲက video တွေကို တစ်ခုပြီးတစ်ခု လုပ်ပါတယ် (ပြီးပြီးသား video တွေကို ကျော်ပါတယ်)။ **Gemini .env** မှာ `.env` ဖိုင်ကို ရွေးပါ (default က ဒီ folder ထဲက `.env`)။ **Save final to** — folder ရွေးထားရင် ပြီးတဲ့ video ကို `<video နာမည်>_Myanmar.mp4` နဲ့ အဲ့ folder ထဲ ထည့်ပေးပါတယ် (ဗလာထားရင် job folder ထဲမှာပဲ)။ |
-| ဘယ်ဘက် | **Source language** (Auto-detect / English / Chinese / Hindi / Korean / …)၊ Narrator engine/voice နဲ့ Edge TTS Speed ကို ရွေးပါ။ အောက်က **Run Logs** မှာ လုပ်ဆောင်မှုကို ကြည့်နိုင်ပါတယ်။ |
+| ဘယ်ဘက် | **Source language** (Auto-detect / English / Chinese / Hindi / Korean / …)၊ **Translation Engine** (Gemini API / NLLB-200 Local)၊ Narrator voice နဲ့ Edge TTS Speed ကို ရွေးပါ။ NLLB Local ရွေးရင် Translation ကို local လုပ်ပေမဲ့ Story Context အတွက် Gemini API key လိုနေသေးတယ်။ အောက်က **Run Logs** မှာ လုပ်ဆောင်မှုကို ကြည့်နိုင်ပါတယ်။ |
 | အလယ် | **Preview** — slider နဲ့ `◀ 5s` / `5s ▶` နဲ့ ကြည့်ချင်တဲ့ အချိန်ကို ရွှေ့ပြီး **Refresh Frame** နှိပ်ပါ။ Title၊ Logo၊ Extra text ကို ဆွဲရွှေ့ပြီး နေရာချလို့ရပါတယ်။ Blur box ကို ဆွဲလို့ရပါတယ်။ |
 | ညာဘက် | **Production Tools** — Zoom (1.00–1.25×)၊ Flip၊ Voice vol (50–300%)၊ Edge TTS Pitch (−4Hz … 0Hz)၊ Short pauses၊ **Ratio** (16:9 / 9:16 / 1:1 / Original) နဲ့ **Fill** (Blur background / Black bars / Crop to fill)၊ **+ Draw Blur Box** / Delete Selected၊ Title (စာ၊ အရွယ်)၊ Logo (ဖိုင်၊ အရွယ်၊ အလင်းဖောက်မှု)၊ Extra Text Box။ |
 | အောက်ခြေ | **START / RESUME** — စတင်/ဆက်လုပ်ရန်။ **STOP SAFELY** — လုံခြုံတဲ့အဆင့်မှာ ရပ်ရန်။ **Open Job Folder** — ထွက်လာတဲ့ဖိုင်များ ကြည့်ရန်။ **Edit Text** — မြန်မာ Narration စာသားကို အပိုင်းလိုက် ပြင်ရန်။ |

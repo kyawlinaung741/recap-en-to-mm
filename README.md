@@ -49,7 +49,8 @@ Narrator only · Whisper + Ollama (Qwen3:4b) + Gemini Context/Audit · Microsoft
 3. **`INSTALL_REQUIREMENTS.bat`** ကို double-click နှိပ်ပါ။ အောက်ပါတွေကို သွင်းပေးပါမယ်:
    - Python package တွေ
    - Title စာရေးဖို့ လိုတဲ့ Chromium
-   - **FFmpeg** — စက်ထဲမှာ မရှိရင် (~100 MB) download လုပ်ပြီး ဒီ folder ထဲက `ffmpeg\` ထဲ ထည့်ပေးပါမယ်။ PATH ထဲ (သို့) `C:\ffmpeg\bin\` မှာ ရှိပြီးသားဆိုရင် အဲ့ဒါကိုပဲ သုံးပါတယ်။
+   - **FFmpeg** — မရှိရင် (~100 MB) download လုပ်ပေးပါမယ်။
+   - **Ollama + Qwen3:4b** — local translation အတွက် install/download လုပ်ပေးပါမယ်။ Model က GB အနည်းငယ်ရှိနိုင်လို့ disk နေရာနဲ့ အချိန်လိုပါတယ်။ Winget မရှိရင် [Ollama download](https://ollama.com/download) မှာ ကိုယ်တိုင် install လုပ်ပြီး installer ကို ပြန် run ပါ။
 4. **`.env.example`** ကို **`.env`** လို့ copy ကူးပါ။ ပြီးရင် ဖွင့်ပြီး key ထည့်ပါ:
    ```ini
    GEMINI_API_KEY=ကိုယ့်_key
@@ -316,7 +317,7 @@ optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself)
 ### Install
 1. Download the repo (Code → Download ZIP) and unzip it.
 2. Run **`INSTALL_REQUIREMENTS.bat`** (pip packages, Chromium for the Myanmar title renderer, and
-   FFmpeg: when it is not on PATH or in `C:\ffmpeg\bin`, about 100 MB is downloaded into `ffmpeg\`).
+   FFmpeg: when it is not on PATH or in `C:\ffmpeg\bin`, about 100 MB is downloaded into `ffmpeg\`; Ollama and the Qwen3:4b model are installed/downloaded for local translation).
    `[WinError 2] The system cannot find the file specified` means FFmpeg is missing — run it again.
 3. Copy **`.env.example`** to **`.env`** and set `GEMINI_API_KEY=` (needed for Story Context and Translation Audit; Ollama handles translation locally). More keys
    (`GEMINI_IMAGE_PROJECT_1_KEY`, `GEMINI_IMAGE_PROJECT_2_KEY`, …) are used in turn when one is used

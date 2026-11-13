@@ -58,7 +58,7 @@ Myanmar story narration · Whisper + GLM Story Context + Gemini-led translation 
    GLM_STORY_CONTEXT_MODEL=glm-4.7-flash
    GLM_TRANSLATION_FALLBACK_MODEL=glm-4.7-flash
    ```
-   GLM key ကို Zhipu BigModel API Console မှာ ဖန်တီးထားတဲ့ API key အဖြစ် ထည့်ပါ။ GLM chat app ကို login ဝင်ထားတာနဲ့ API ချိတ်ဆက်ခွင့် မတူပါဘူး။ Story Context အတွက် API key လိုပါတယ်။ Key တစ်ခုထက် ပိုထည့်ချင်ရင် App ကိုဖွင့်ပြီး အပေါ်ဘက် **API Keys** ခလုတ်ကို နှိပ်ပါ။ အဲဒီနေရာမှာ Key 1၊ Key 2၊ Key 3 ဆိုပြီး အကွက် ၃ ခုရှိပါတယ်။ Google AI Studio က ရထားတဲ့ Key တွေကို အကွက်တစ်ခုစီမှာ ကူးထည့်ပြီး **Save Keys** နှိပ်ပါ။ `.env` ဖိုင်ထဲကို အလိုအလျောက် သိမ်းပေးပြီး နောက်တစ်ကြိမ် **START / RESUME** နှိပ်တဲ့အခါ သုံးပါတယ်။ Key တစ်ခုရဲ့ quota ပြည့်သွားရင် နောက် Key ကို အလိုအလျောက် ပြောင်းသုံးပါတယ်။ လက်ရှိ run နေတဲ့အလုပ်အတွင်း Key ပြောင်းထားရင် နောက်တစ်ကြိမ် START / RESUME မှာ စတင်သက်ရောက်ပါမယ်။
+   GLM API key ကို [Zhipu BigModel Console](https://open.bigmodel.cn/) မှာ ဖန်တီးပြီး App ရဲ့ **API Keys / Models** ထဲက GLM အကွက်မှာ ထည့်ပါ။ Gemini key တွေကို Gemini အပိုင်းမှာပဲ ထည့်ပါ။ GLM Story Context က အဓိကဖြစ်ပြီး မအောင်မြင်တဲ့ chunk ကို Gemini က ဆက်လုပ်ပါတယ်။ Timestamp Translation မှာတော့ Gemini က အဓိကဖြစ်ပြီး Gemini model/key fallback chain မအောင်မြင်မှ GLM ကို အစားထိုးခေါ်သုံးပါတယ်။
 
 > ⚠️ `.env` ထဲမှာ ကိုယ့် key ရှိလို့ ဘယ်သူ့ကိုမှ မပို့ပါနဲ့၊ GitHub ပေါ်လည်း မတင်ပါနဲ့ (`.gitignore` ထဲမှာ ထည့်ထားပြီးသားပါ)။
 

@@ -60,18 +60,27 @@ def whisper_choice(language: str, other_model: str = WHISPER_MODEL_OTHER) -> tup
     return (WHISPER_MODEL, WHISPER_LANGUAGE) if code == "en" else (str(other_model or WHISPER_MODEL_OTHER), code)
 
 
-# Stable/free-tier Gemini text models, newest/highest-priority first. TTS,
-# image-only, Live API, and paid-only Gemini 4 model IDs do not belong here;
-# Gemini 4 Hydrogen is included because Google lists it on the Free tier.
+# Text-generation Gemini API fallback models copied from Gpu-update.
+# Gemini Decision 1 is configured separately: it uses the Decisions API and
+# returns classifications/scores, not generated text, so it cannot be placed
+# in this generate_content() fallback chain.
 GEMINI_MODEL_FALLBACK_CHAIN = [
-    "gemini-4-hydrogen",
     "gemini-3.8-flash",
+    "gemini-4-hydrogen",
+    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.6-flash",
+    "gemini-3.7-flash",
     "gemini-3.1-flash-lite",
-    # Legacy free-tier fallback; Google limits new access to existing users.
+    "gemini-2.5-pro",
+    "gemini-2.5-flash",
     "gemini-2.5-flash-lite",
 ]
+
+# Google AI Studio Gemini Decisions API model (free no-cost tier available
+# for prototyping; usage limits apply). Call via client.decisions.create(),
+# never via models.generate_content().
+GEMINI_DECISION_MODEL = os.getenv("GEMINI_DECISION_MODEL", "gemini-decision-1").strip() or "gemini-decision-1"
 
 
 GEMINI_BUSY_ROUNDS = 5                    # every model 503: wait and start the chain again this many times

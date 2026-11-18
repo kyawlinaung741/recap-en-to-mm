@@ -379,6 +379,51 @@ def probe_wav_duration(ffprobe: str, path: Path) -> float:
     return probe_duration(ffprobe, path)
 
 
+def probe_stream_durations(ffprobe: str, path: Path) -> dict[str, float]:
+    """Return decoded stream durations independently; container duration can hide A/V drift."""
+    result = subprocess.run(
+        [ffprobe, "-v", "error", "-show_entries",
+         "stream=codec_type,duration,duration_ts,time_base,sample_rate",
+         "-of", "json", str(path)],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"ffprobe stream timing failed: {result.stderr[-2000:]}")
+    streams = json.loads(result.stdout or "{}").get("streams") or []
+    found: dict[str, float] = {}
+    for stream in streams:
+        kind = str(stream.get("codec_type") or "")
+        if kind not in {"video", "audio"} or kind in found:
+            continue
+        duration = stream.get("duration")
+        if duration not in (None, "N/A", ""):
+            found[kind] = float(duration)
+            continue
+        ticks, time_base = stream.get("duration_ts"), stream.get("time_base")
+        if ticks not in (None, "N/A", "") and time_base:
+            numerator, denominator = str(time_base).split("/", 1)
+            found[kind] = int(ticks) * int(numerator) / int(denominator)
+    missing = {"video", "audio"} - set(found)
+    if missing:
+        raise RuntimeError(f"Final file is missing timed streams: {', '.join(sorted(missing))}")
+    return found
+
+
+def assert_duration_sync(video_seconds: float, audio_seconds: float, *, tolerance: float, stage: str) -> float:
+    """Fail closed when independently measured A/V durations exceed the allowed clock error."""
+    video_seconds, audio_seconds = float(video_seconds), float(audio_seconds)
+    if video_seconds <= 0 or audio_seconds <= 0:
+        raise RuntimeError(f"{stage}: invalid A/V duration (video={video_seconds}, audio={audio_seconds}).")
+    diff = video_seconds - audio_seconds
+    if abs(diff) > float(tolerance):
+        raise RuntimeError(
+            f"{stage}: A/V sync audit FAILED — picture={video_seconds:.6f}s, "
+            f"narration={audio_seconds:.6f}s, diff={diff:+.6f}s, "
+            f"allowed={float(tolerance):.6f}s. Final output was not accepted."
+        )
+    return diff
+
+
 def next_cumulative_frame_count(audio_end_seconds: float, frames_done: int, fps: int = 30) -> tuple[int, int]:
     """Allocate frames from the absolute audio timeline; rounding error stays below half a frame."""
     target_total = int(round(max(0.0, float(audio_end_seconds)) * int(fps)))
@@ -1601,12 +1646,37 @@ class EdgeSmartSync:
                 render_overlays, encoder, paths.work, self.log, frame_size=(layout["cw"], layout["ch"]),
                 quality=self.video_quality,
             )
+        # Pre-mux gate: do not let -shortest silently hide a long-video timing error.
+        pre_mux_video = probe_duration(self.ffprobe, video_for_mux)
+        pre_mux_audio = probe_wav_duration(self.ffprobe, paths.voice)
+        pre_diff = assert_duration_sync(
+            pre_mux_video, pre_mux_audio, tolerance=(1.0 / 30.0 + 1.0 / 48000.0),
+            stage="Pre-mux 30fps timeline",
+        )
+        self.log(
+            f"🧪 PRE-MUX SYNC PASS: picture={pre_mux_video:.6f}s · "
+            f"narration={pre_mux_audio:.6f}s · diff={pre_diff:+.6f}s"
+        )
         self.log(f"🎧 {tts_label} audio mux...")
         volume_percent = int(getattr(self, "voice_volume_percent", 100) or 100)
         if volume_percent != 100:
             self.log(f"🔊 Voice volume {volume_percent}% applied at final mux (limiter on)")
         mux_audio(self.ffmpeg, video_for_mux, paths.voice, paths.final, volume_percent)
+        try:
+            stream_durations = probe_stream_durations(self.ffprobe, paths.final)
+            final_diff = assert_duration_sync(
+                stream_durations["video"], stream_durations["audio"],
+                tolerance=(1.0 / 30.0 + 1024.0 / 48000.0 + 0.005),
+                stage="Final MP4 stream audit",
+            )
+        except Exception:
+            paths.final.unlink(missing_ok=True)
+            raise
         final_duration = probe_duration(self.ffprobe, paths.final)
+        self.log(
+            f"✅ FINAL A/V AUDIT PASS: video={stream_durations['video']:.6f}s · "
+            f"audio={stream_durations['audio']:.6f}s · diff={final_diff:+.6f}s"
+        )
         self.log(f"✅ FINAL READY: {paths.final}")
         self.log(f"⏱️ Final duration: {final_duration:.2f}s")
         srt = ""

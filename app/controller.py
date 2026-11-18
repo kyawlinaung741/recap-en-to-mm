@@ -16,6 +16,13 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+# controller.py is launched as `python app/controller.py` on Windows, which puts
+# only the app directory on sys.path. Add the project root before importing the
+# sibling runtime package.
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from core import (FRAME_FILLS, OUTPUT_RATIOS, QUALITY_LABELS, normalize_segments, output_canvas, probe_video_size,
                   video_quality)
 from preview_tools import probe_duration as preview_probe_duration, extract_preview_frame, scale_logo_preview
@@ -28,7 +35,6 @@ from subtitle_png import geometry as subtitle_geometry, sample as subtitle_sampl
 from recap_runtime.services.structured_logger import append_error, error_log_path
 from recap_runtime.services.job_store import JobStore
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT_DIR / "config.json"
 JOBS_DIR = ROOT_DIR / "jobs"
 LOGS_DIR = ROOT_DIR / "logs"

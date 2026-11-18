@@ -38,6 +38,27 @@ class ParaformerTests(unittest.TestCase):
         self.assertEqual(rp.whisper_choice("hi"), ("medium", "hi"))
         self.assertEqual(rp.whisper_choice("en"), ("small.en", "en"))
 
+    def test_paraformer_failure_falls_back_to_configured_whisper_device(self):
+        service = WhisperTimestampService(
+            model_size="paraformer-zh",
+            fallback_model_size="small",
+            backend="paraformer-zh",
+            device="cuda",
+        )
+
+        def fake_whisper_load():
+            service._active_backend = "faster-whisper"
+            service._model = object()
+            return True
+
+        with mock.patch.object(service, "_load_paraformer", return_value=False), \
+                mock.patch.object(service, "_load_faster_whisper", side_effect=fake_whisper_load):
+            service._ensure_model()
+
+        self.assertEqual(service._active_backend, "faster-whisper")
+        self.assertEqual(service.model_size, "small")
+        self.assertEqual(service.device, "cuda")
+
 
 if __name__ == "__main__":
     unittest.main()

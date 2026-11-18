@@ -2084,6 +2084,7 @@ class RecapPlanBuilder:
                 selected_backend = "auto"
             whisper = whisper_mod.WhisperTimestampService(
                 model_size=whisper_model,
+                fallback_model_size=self.whisper_model_other,
                 backend=selected_backend,
                 device=str(runtime_cfg.get("whisper_device", os.getenv("WHISPER_DEVICE", "cuda"))),
                 compute_type=str(runtime_cfg.get("whisper_compute_type", os.getenv("WHISPER_COMPUTE_TYPE", "float16"))),
@@ -2093,7 +2094,7 @@ class RecapPlanBuilder:
             transcript = whisper.transcribe(str(whisper_media), duration)
             transcript["source_title"] = source_title or source.stem
             transcript["backend"] = transcript.get("backend") or "faster-whisper"
-            transcript["model"] = whisper_model
+            transcript["model"] = transcript.get("model") or whisper_model
             transcript["language"] = whisper_language
             _atomic_json(transcript_file, transcript)
             transcript_text_file.write_text(str(transcript.get("text") or ""), encoding="utf-8")

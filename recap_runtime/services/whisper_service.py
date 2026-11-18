@@ -31,12 +31,14 @@ class WhisperTimestampService:
     def __init__(
         self,
         model_size: Optional[str] = None,
+        fallback_model_size: Optional[str] = None,
         backend: str = "auto",
         device: Optional[str] = None,
         compute_type: Optional[str] = None,
         language: Optional[str] = None,
     ) -> None:
         self.model_size = model_size or os.getenv("WHISPER_MODEL", "medium")
+        self.fallback_model_size = fallback_model_size or os.getenv("WHISPER_MODEL_OTHER", "medium")
         self.backend = (backend or os.getenv("WHISPER_BACKEND", "auto")).lower()
         self.device = device or os.getenv("WHISPER_DEVICE", "cuda")
         self.compute_type = compute_type or os.getenv("WHISPER_COMPUTE_TYPE", "int8_float32")
@@ -65,16 +67,7 @@ class WhisperTimestampService:
             return True
         except Exception as exc:
             print(f"⚠️ Paraformer-zh {self.device} load failed: {exc}")
-            if self.device != "cpu":
-                try:
-                    print("↩️ Trying Paraformer-zh on CPU", flush=True)
-                    kwargs["device"] = "cpu"
-                    self._model = AutoModel(**kwargs)
-                    self._active_backend = "paraformer-zh"
-                    self.device = "cpu"
-                    return True
-                except Exception as cpu_exc:
-                    print(f"⚠️ Paraformer-zh CPU load failed: {cpu_exc}")
+            print("↩️ Paraformer-zh unavailable; falling back to faster-whisper on the configured device", flush=True)
             return False
 
     def _download_model_once(self) -> None:
@@ -236,6 +229,10 @@ class WhisperTimestampService:
         for backend in backends:
             if backend == "paraformer" and self._load_paraformer():
                 return
+            if backend == "paraformer":
+                self.model_size = str(self.fallback_model_size or "medium").strip() or "medium"
+                if self._load_faster_whisper():
+                    return
             if backend == "faster" and self._load_faster_whisper():
                 return
             if backend == "openai" and self._load_openai_whisper():

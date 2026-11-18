@@ -61,8 +61,10 @@ def whisper_choice(language: str, other_model: str = WHISPER_MODEL_OTHER) -> tup
 
 
 # Stable/free-tier Gemini text models, newest/highest-priority first. TTS,
-# image-only, Live API, and paid-only Gemini 4 model IDs do not belong here.
+# image-only, Live API, and paid-only Gemini 4 model IDs do not belong here;
+# Gemini 4 Hydrogen is included because Google lists it on the Free tier.
 GEMINI_MODEL_FALLBACK_CHAIN = [
+    "gemini-4-hydrogen",
     "gemini-3.8-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.6-flash",
@@ -146,7 +148,7 @@ def _configure_gemini_key_pool(
 
     models = [str(x).strip() for x in (model_chain or GEMINI_MODEL_FALLBACK_CHAIN) if str(x).strip()]
     if not models:
-        models = [str(getattr(ai, "text_model", "gemini-3.8-flash") or "gemini-3.8-flash")]
+        models = [str(getattr(ai, "text_model", "gemini-4-hydrogen") or "gemini-4-hydrogen")]
 
     model_index = 0
     key_index = 0
@@ -1747,7 +1749,7 @@ class RecapPlanBuilder:
         atomic_max_duration: float = 5.6,
         atomic_target_duration: float = 4.2,
         gemini_request_timeout_seconds: int = 120,
-        gemini_text_model: str = "gemini-3.8-flash",
+        gemini_text_model: str = "gemini-4-hydrogen",
         source_language: str = "auto",
         whisper_model_other: str = WHISPER_MODEL_OTHER,
     ):
@@ -1771,7 +1773,7 @@ class RecapPlanBuilder:
         self.atomic_max_duration = max(4.0, float(atomic_max_duration))
         self.atomic_target_duration = max(2.5, min(float(atomic_target_duration), self.atomic_max_duration))
         self.gemini_request_timeout_seconds = max(30, min(int(gemini_request_timeout_seconds), 600))
-        self.gemini_text_model = _clean(gemini_text_model) or "gemini-3.8-flash"
+        self.gemini_text_model = _clean(gemini_text_model) or "gemini-4-hydrogen"
 
     def _validate_runtime(self) -> None:
         required = [

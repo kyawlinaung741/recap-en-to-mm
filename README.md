@@ -170,7 +170,7 @@ Smart Sync အဆင့်မှာ **Producer / Consumer Pipeline** သုံ�
 - Gemini ကို **ဘာသာပြန်ဖို့ပဲ** သုံးတယ်။ English ကို စာသားပြောင်းတာက စက်ထဲမှာ Whisper နဲ့ လုပ်တယ်။
 - အခမဲ့ key မှာ တစ်ရက်ကို သုံးလို့ရတဲ့ အကြိမ်ရေ ကန့်သတ်ထားတယ် (Google project တစ်ခုချင်းစီ အလိုက်)။ ပြည့်ရင်:
   - နောက် key ကို အလိုလို ပြောင်းတယ်။
-  - Key တွေ အကုန်ပြည့်ရင် နောက် model ကို ပြောင်းတယ် (`gemini-3.8-flash → gemini-3.5-flash-lite → gemini-3.6-flash → gemini-3.1-flash-lite → gemini-2.5-flash-lite`)။
+  - Key တွေ အကုန်ပြည့်ရင် နောက် model ကို ပြောင်းတယ် (`gemini-4-hydrogen → gemini-3.8-flash → gemini-3.5-flash-lite → gemini-3.6-flash → gemini-3.1-flash-lite → gemini-2.5-flash-lite`)။
   - အကုန်ပြည့်သွားရင် ရပ်သွားပေမဲ့ ပြီးသမျှ မပျောက်ဘူး။ နောက်နေ့ (သို့) key အသစ်ထည့်ပြီး **START / RESUME** နှိပ်ရင် ရပ်ခဲ့တဲ့နေရာကနေ ဆက်တယ်။
 - Gemini ကို VPN / proxy နဲ့မှ သုံးလို့ရတဲ့ စက်ဆိုရင် `.env` ထဲမှာ `GEMINI_PROXY=http://127.0.0.1:10808` (ကိုယ့် proxy လိပ်စာ) ထည့်ပါ။ `127.0.0.1:10808` (v2rayN) ဖွင့်ထားရင် အလိုလို သုံးပါတယ်။ အမြဲ တိုက်ရိုက်ပဲ သုံးချင်ရင် `GEMINI_PROXY=none` ထည့်ပါ။ Edge TTS ကတော့ proxy မသုံးဘဲ တိုက်ရိုက် အရင်စမ်းပါတယ်။
 
@@ -315,7 +315,7 @@ optional (without the CUDA 12 libraries Whisper falls back to the CPU by itself)
 3. Copy **`.env.example`** to **`.env`** and set `GEMINI_API_KEY=`. More keys
    (`GEMINI_IMAGE_PROJECT_1_KEY`, `GEMINI_IMAGE_PROJECT_2_KEY`, …) are used in turn when one is used
    up; after all keys the next model is tried
-   (`gemini-3.8-flash → gemini-3.5-flash-lite → gemini-3.6-flash → gemini-3.1-flash-lite → gemini-2.5-flash-lite`).
+   (`gemini-4-hydrogen → gemini-3.8-flash → gemini-3.5-flash-lite → gemini-3.6-flash → gemini-3.1-flash-lite → gemini-2.5-flash-lite`).
    If Gemini needs a proxy, add `GEMINI_PROXY=http://host:port` (a running v2rayN on
    `127.0.0.1:10808` is used automatically; `GEMINI_PROXY=none` forces direct).
 

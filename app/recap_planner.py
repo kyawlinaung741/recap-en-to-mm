@@ -228,6 +228,10 @@ def _configure_gemini_key_pool(
         busy["left_first_at"] = None      # a quota move is for good: no going back to the first model
         return advance_model("key pool exhausted")
 
+    def skip_unavailable_model() -> bool:
+        # A 404 is permanent for this model: never wait/restart the fallback chain.
+        return advance_model("404 model not found; skip unavailable model")
+
     # 503 "high demand" (2026-10-17, users of the shared tool): one busy moment moved the job down the chain for
     # good, and a 503 on the last model stopped the whole job. Now every model busy -> wait (30 s, doubling, at
     # most 5 min) and start again from the first model, up to BUSY_ROUNDS times; and 5 minutes after a busy
@@ -265,6 +269,7 @@ def _configure_gemini_key_pool(
     ai._recap_model_chain = list(models)
     ai._recap_rotate_gemini_key = rotate_key
     ai._recap_advance_gemini_model = advance_on_busy
+    ai._recap_advance_unavailable_model = skip_unavailable_model
     ai._recap_advance_after_key_pool = advance_after_key_pool
     log(f"🔑 Gemini key pool ready — {len(key_pool)} key(s); active: {key_pool[0][0]}")
     log("🤖 Gemini fallback chain: " + " → ".join(models))
@@ -1153,10 +1158,10 @@ def _gemini_json(
             if _is_gemini_model_not_found(exc):
                 if log:
                     log(f"⚠️ {active_model} returned 404/model-not-found; skipping this unavailable model.")
-                advance = getattr(ai, "_recap_advance_gemini_model", None)
+                advance = getattr(ai, "_recap_advance_unavailable_model", None)
                 if callable(advance):
                     try:
-                        if advance("404 model not found; skip unavailable model"):
+                        if advance():
                             continue  # resend the exact same prompt on the next model
                     except Exception as model_exc:
                         raise RuntimeError(f"Gemini model switch failed after 404: {model_exc}") from model_exc

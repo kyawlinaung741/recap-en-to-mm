@@ -194,30 +194,6 @@ Tool ဖွင့်ပြီး START နှိပ်လိုက်ရင် `
 | `overlay_blur_strength` | `18` | Blur box ရဲ့ ဝါးအား |
 | `whisper_model_other` | `medium` | English မဟုတ်တဲ့ ဘာသာအတွက် Whisper model (NVIDIA GPU မရှိတဲ့ စက်မှာ `small` က ပိုမြန်တယ်) |
 
-### WhisperX optional alignment
-
-ပုံမှန် installation က `faster-whisper` ကိုပဲ သုံးပြီး download ပမာဏနည်းအောင်ထားပါတယ်။ စကားလုံးတစ်လုံးချင်းစီရဲ့ timing ကို ပိုတိကျစေချင်ရင် WhisperX ကို optional အနေနဲ့ သွင်းနိုင်ပါတယ်:
-
-```bat
-py -3.12 -m pip install -r requirements-whisperx.txt
-```
-
-ပြီးရင် `recap_runtime/config/whisper.json` ဖိုင်ကို ဖန်တီးပြီး အောက်ပါအတိုင်းထားပါ:
-
-```json
-{
-  "whisper_backend": "whisperx",
-  "whisper_device": "cuda",
-  "whisper_compute_type": "int8_float32"
-}
-```
-
-WhisperX mode မှာ အရင်ဆုံး လက်ရှိ faster-whisper နဲ့ transcript ထုတ်ပါတယ်။ ပြီးမှ အသံဘာသာစကားအလိုက် Wav2Vec2 phoneme model ကို download လုပ်ပြီး forced alignment လုပ်ကာ word `start/end` timing ကို ပြန်တိကျစေပါတယ်။ ဒီနည်းက Whisper ကို နှစ်ခါပြန် run မလုပ်ဘဲ လက်ရှိ Smart Sync transcript/checkpoint နဲ့လည်း ကိုက်ညီပါတယ်။ Alignment မအောင်မြင်ရင် faster-whisper ရဲ့ timing ကို မဖျက်ဘဲ ဆက်သုံးပါတယ်။
-
-ပထမဆုံး download ပမာဏကို အကြမ်းဖျင်းတွက်ရင် WhisperX Python package ကိုယ်တိုင်က ~16.5 MB wheel ဖြစ်ပါတယ်။ ဒါပေမဲ့ dependency တွေနဲ့ model တွေက ပိုကြီးပါတယ်။ English source အတွက် လက်ရှိ `small.en` Whisper model ~460 MB နဲ့ English alignment model ~300–400 MB အတန်းအစား ဖြစ်လို့ ပထမဆုံးစက်တင်ချိန်မှာ စုစုပေါင်း ~0.8–1.2 GB လောက် နေရာလွတ်ထားပါ။ Chinese source အတွက် Whisper multilingual model က လက်ရှိရွေးထားတဲ့ model အပေါ်မူတည်ပြီး ~1.5 GB ဖြစ်နိုင်ပြီး Chinese alignment model က ~1.3 GB ခန့်ရှိလို့ ~3 GB သို့မဟုတ် ထိုထက်ပို နေရာလွတ်ထားတာက ပိုလုံခြုံပါတယ်။ Model တစ်ခုချင်းစီက တစ်ခါပဲ download လုပ်ပြီး Hugging Face cache ထဲမှာ သိမ်းထားပါတယ်။
-
-WhisperX ရဲ့ speaker diarization က Phase 4 မှာ မဖွင့်ထားသေးပါဘူး။ အဲဒါကို ထည့်မယ်ဆိုရင် `pyannote` model၊ Hugging Face access token နဲ့ model conditions ကို accept လုပ်ရပြီး download/VRAM ပမာဏ ထပ်တိုးပါမယ်။
-
 `gemini_role_models` ကို လိုမှသာ `config.json` ထဲမှာ ထည့်ပါ။ List သို့မဟုတ် comma-separated string နှစ်မျိုးလုံး ရပါတယ်:
 
 ```json

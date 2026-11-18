@@ -1,5 +1,0 @@
-# Optional Phase 4 alignment backend; install after requirements.txt only if needed.
-# WhisperX reuses the existing faster-whisper ASR path in Recap and adds word-level forced alignment.
-whisperx==3.8.6
-# Optional: faster Numba-accelerated alignment loops.
-numba>=0.60

@@ -42,6 +42,8 @@ class WhisperTimestampService:
         self.language = language or os.getenv("WHISPER_LANGUAGE") or None
         self._model: Any = None
         self._active_backend: Optional[str] = None
+        self._whisperx: Any = None
+        self._alignment_model_name = ""
 
     def _download_model_once(self) -> None:
         """First run on a PC: the model (~460 MB for small.en, ~1.5 GB for medium) comes from huggingface.co.
@@ -164,6 +166,20 @@ class WhisperTimestampService:
             print(f"⚠️ faster-whisper CPU load failed: {last_gpu_exc}")
         return False
 
+    def _load_whisperx(self) -> bool:
+        """Load WhisperX as an optional forced-alignment layer over faster-whisper ASR."""
+        try:
+            import whisperx
+        except Exception as exc:
+            print(f"⚠️ WhisperX is not installed; using faster-whisper instead: {exc}")
+            return False
+        if not self._load_faster_whisper():
+            return False
+        self._whisperx = whisperx
+        self._active_backend = "whisperx"
+        print("✅ WhisperX alignment backend ready (ASR=faster-whisper)")
+        return True
+
     def _load_openai_whisper(self) -> bool:
         try:
             import whisper
@@ -192,19 +208,24 @@ class WhisperTimestampService:
             return
 
         backends = []
+        if self.backend in {"whisperx", "whisper-x"}:
+            backends.append("whisperx")
+            backends.append("faster")
         if self.backend in {"auto", "faster", "faster-whisper"}:
             backends.append("faster")
         if self.backend in {"auto", "openai", "openai-whisper", "whisper"}:
             backends.append("openai")
 
         for backend in backends:
+            if backend == "whisperx" and self._load_whisperx():
+                return
             if backend == "faster" and self._load_faster_whisper():
                 return
             if backend == "openai" and self._load_openai_whisper():
                 return
 
         raise RuntimeError(
-            "Local Whisper backend မတွေ့ပါ။ faster-whisper သို့မဟုတ် openai-whisper "
+            "Local Whisper backend မတွေ့ပါ။ WhisperX/faster-whisper သို့မဟုတ် openai-whisper "
             "install/config ကိုစစ်ပါ။"
         )
 
@@ -212,7 +233,7 @@ class WhisperTimestampService:
         """Which language the speech in media_path is in: (Whisper code such as "en", "zh", "hi", probability).
         Needs a multilingual model (not a ".en" one); music and silence are skipped (VAD), up to 8 pieces of 30 s."""
         self._ensure_model()
-        if self._active_backend != "faster-whisper":
+        if self._active_backend not in {"faster-whisper", "whisperx"}:
             raise RuntimeError("Language detection needs faster-whisper")
         from faster_whisper import decode_audio
 
@@ -339,6 +360,75 @@ class WhisperTimestampService:
             "avg_no_speech_prob": (sum(no_speech_values) / len(no_speech_values)) if no_speech_values else None,
             "avg_compression_ratio": (sum(compression_ratio_values) / len(compression_ratio_values)) if compression_ratio_values else None,
         }
+
+    @staticmethod
+    def _merge_aligned_words(original: list[dict[str, Any]], aligned: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Keep the stable transcript shape while replacing only word timings."""
+        words: list[dict[str, Any]] = []
+        for word in aligned:
+            text = str(word.get("word") or word.get("text") or "").strip()
+            try:
+                start = float(word.get("start"))
+                end = float(word.get("end"))
+            except (TypeError, ValueError):
+                continue
+            if text and end > start:
+                words.append({"start": round(start, 3), "end": round(end, 3), "text": text})
+        return words or list(original)
+
+    @classmethod
+    def _merge_whisperx_segments(
+        cls, original: list[dict[str, Any]], aligned: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        for index, source in enumerate(original):
+            item = dict(source)
+            aligned_item = aligned[index] if index < len(aligned) else {}
+            item["words"] = cls._merge_aligned_words(
+                list(source.get("words") or []), list(aligned_item.get("words") or [])
+            )
+            # Keep ASR segment boundaries authoritative for sentence segmentation and Smart Sync.
+            merged.append(item)
+        return merged
+
+    def _align_whisperx(self, result: dict[str, Any], media_path: str) -> dict[str, Any]:
+        """Run language-specific forced alignment; return ASR result if alignment is unavailable."""
+        if self._whisperx is None or not result.get("segments"):
+            return result
+        language = str(result.get("language") or self.language or "").strip().lower()
+        if not language:
+            print("⚠️ WhisperX skipped: transcription language is unknown")
+            return result
+        try:
+            import gc
+            import torch
+
+            # ASR is finished; free its model before loading the language-specific wav2vec2 aligner.
+            self._model = None
+            gc.collect()
+            if self.device != "cpu" and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            align_model, metadata = self._whisperx.load_align_model(
+                language_code=language, device=self.device
+            )
+            audio = self._whisperx.load_audio(media_path)
+            aligned = self._whisperx.align(
+                result["segments"], align_model, metadata, audio, self.device,
+                return_char_alignments=False,
+            )
+            result = dict(result)
+            result["segments"] = self._merge_whisperx_segments(result["segments"], list(aligned.get("segments") or []))
+            result["backend"] = "whisperx"
+            result["alignment"] = "whisperx"
+            result["alignment_language"] = language
+            print(f"✅ WhisperX word alignment complete: language={language}", flush=True)
+            return result
+        except Exception as exc:
+            print(f"⚠️ WhisperX alignment unavailable; keeping faster-whisper timings: {exc}", flush=True)
+            result = dict(result)
+            result["alignment"] = "unavailable"
+            result["alignment_error"] = str(exc)[:300]
+            return result
 
     def _transcribe_faster_chunked(self, media_path: str, vad_filter: bool = True, media_duration: Optional[float] = None) -> dict[str, Any]:
         """Split long sources into bounded PCM chunks before faster-whisper feature extraction."""
@@ -565,7 +655,7 @@ class WhisperTimestampService:
         self._ensure_model()
         print(f"🎙️ Local Whisper timestamp transcription: {path.name}")
 
-        if self._active_backend == "faster-whisper":
+        if self._active_backend in {"faster-whisper", "whisperx"}:
             try:
                 result = self._transcribe_faster_chunked(str(path), vad_filter=True, media_duration=media_duration)
             except RuntimeError as exc:
@@ -583,6 +673,8 @@ class WhisperTimestampService:
                 print("⚠️ Whisper VAD=ON returned 0 segments — retrying SAME source once with VAD=OFF...")
                 result = self._transcribe_faster_chunked(str(path), vad_filter=False, media_duration=media_duration)
                 result["vad_fallback_used"] = True
+            if self._active_backend == "whisperx":
+                result = self._align_whisperx(result, str(path))
         elif self._active_backend == "openai-whisper":
             result = self._transcribe_openai(str(path))
         else:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Optional
@@ -339,6 +340,61 @@ class WhisperTimestampService:
             "avg_compression_ratio": (sum(compression_ratio_values) / len(compression_ratio_values)) if compression_ratio_values else None,
         }
 
+    def _transcribe_faster_chunked(self, media_path: str, vad_filter: bool = True, media_duration: Optional[float] = None) -> dict[str, Any]:
+        """Split long sources into bounded PCM chunks before faster-whisper feature extraction."""
+        chunk_seconds = max(60, int(os.getenv("WHISPER_CHUNK_SECONDS", "300")))
+        threshold = max(chunk_seconds, int(os.getenv("WHISPER_CHUNK_THRESHOLD_SECONDS", "600")))
+        duration = float(media_duration or 0.0)
+        ffmpeg, ffprobe = shutil.which("ffmpeg"), shutil.which("ffprobe")
+        if duration <= 0 and ffprobe:
+            probe = subprocess.run([ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", media_path], capture_output=True, text=True, timeout=30)
+            try: duration = float((probe.stdout or "").strip()) if probe.returncode == 0 else 0.0
+            except (TypeError, ValueError): duration = 0.0
+        if duration <= threshold:
+            return self._transcribe_faster(media_path, vad_filter=vad_filter, media_duration=media_duration)
+        if not ffmpeg:
+            raise RuntimeError("Long-audio Whisper needs ffmpeg on PATH to split the source safely; no whole-file fallback was attempted because it may exhaust RAM.")
+
+        print(f"🧩 Long-audio mode: splitting {self._fmt_clock(duration)} into {chunk_seconds}s chunks", flush=True)
+        all_segments, logprobs, no_speech, compression = [], [], [], []
+        words_total, language, language_probability, vad_fallback_used = 0, self.language or "", 0.0, False
+        with tempfile.TemporaryDirectory(prefix="recap-whisper-") as td:
+            pattern = str(Path(td) / "chunk_%05d.wav")
+            split = subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", media_path, "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-f", "segment", "-segment_time", str(chunk_seconds), "-reset_timestamps", "1", pattern], capture_output=True, text=True, timeout=max(300, int(duration * 0.25)))
+            if split.returncode:
+                raise RuntimeError("FFmpeg could not split long Whisper audio: " + (split.stderr or "")[-1000:])
+            chunks = sorted(Path(td).glob("chunk_*.wav"))
+            if not chunks: raise RuntimeError("FFmpeg produced no audio chunks for Whisper.")
+            for i, chunk in enumerate(chunks):
+                offset = i * chunk_seconds
+                print(f"🎙️ Whisper chunk {i+1}/{len(chunks)} | {self._fmt_clock(offset)}", flush=True)
+                part = self._transcribe_faster(str(chunk), vad_filter=vad_filter)
+                if not part.get("segments") and vad_filter:
+                    print(f"⚠️ Chunk {i+1}: retrying with VAD=OFF", flush=True)
+                    part = self._transcribe_faster(str(chunk), vad_filter=False)
+                    vad_fallback_used = vad_fallback_used or bool(part.get("segments"))
+                if not language:
+                    language = str(part.get("language") or "")
+                    language_probability = float(part.get("language_probability") or 0.0)
+                for raw in part.get("segments") or []:
+                    seg = dict(raw); seg["id"] = len(all_segments)
+                    seg["start"] = round(float(seg.get("start", 0)) + offset, 3)
+                    seg["end"] = round(float(seg.get("end", 0)) + offset, 3)
+                    seg["words"] = [{**w, "start": round(float(w.get("start", 0)) + offset, 3), "end": round(float(w.get("end", 0)) + offset, 3)} for w in (seg.get("words") or [])]
+                    all_segments.append(seg)
+                words_total += int(part.get("word_count") or 0)
+                for key, dest in (("avg_logprob", logprobs), ("avg_no_speech_prob", no_speech), ("avg_compression_ratio", compression)):
+                    try:
+                        if part.get(key) is not None: dest.append(float(part[key]))
+                    except (TypeError, ValueError): pass
+        result = {"backend":"faster-whisper", "model":self.model_size, "language":language, "language_probability":language_probability, "segments":all_segments, "word_count":words_total,
+                  "avg_logprob":sum(logprobs)/len(logprobs) if logprobs else None,
+                  "avg_no_speech_prob":sum(no_speech)/len(no_speech) if no_speech else None,
+                  "avg_compression_ratio":sum(compression)/len(compression) if compression else None}
+        if vad_fallback_used: result["vad_fallback_used"] = True
+        print(f"✅ Long-audio chunks combined: {len(all_segments)} segments", flush=True)
+        return result
+
     def _transcribe_openai(self, media_path: str) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "verbose": False,
@@ -511,7 +567,7 @@ class WhisperTimestampService:
 
         if self._active_backend == "faster-whisper":
             try:
-                result = self._transcribe_faster(str(path), vad_filter=True, media_duration=media_duration)
+                result = self._transcribe_faster_chunked(str(path), vad_filter=True, media_duration=media_duration)
             except RuntimeError as exc:
                 # An NVIDIA GPU without the CUDA 12 libraries (cublas64_12.dll / cuDNN) loads the
                 # model but fails on the first audio: finish on the CPU instead of stopping.
@@ -525,7 +581,7 @@ class WhisperTimestampService:
                 result = self._transcribe_faster(str(path), vad_filter=True, media_duration=media_duration)
             if not result.get("segments"):
                 print("⚠️ Whisper VAD=ON returned 0 segments — retrying SAME source once with VAD=OFF...")
-                result = self._transcribe_faster(str(path), vad_filter=False, media_duration=media_duration)
+                result = self._transcribe_faster_chunked(str(path), vad_filter=False, media_duration=media_duration)
                 result["vad_fallback_used"] = True
         elif self._active_backend == "openai-whisper":
             result = self._transcribe_openai(str(path))

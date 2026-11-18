@@ -7,7 +7,7 @@ if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))
 
 from recap_planner import (
-    GEMINI_DECISION_MODEL, GEMINI_MODEL_FALLBACK_CHAIN,
+    GEMINI_DECISION_MODEL, GEMINI_MODEL_FALLBACK_CHAIN, GEMINI_ROLE_MODEL_CHAINS,
     _STORY_CONTEXT_RESPONSE_SCHEMA, _is_gemini_model_not_found,
 )
 
@@ -40,6 +40,15 @@ class GeminiSchemaTests(unittest.TestCase):
                 "gemini-3.1-flash-lite",
             ],
         )
+
+    def test_model_roles_have_independent_nonempty_chains(self):
+        self.assertEqual(
+            set(GEMINI_ROLE_MODEL_CHAINS), {"context", "translation", "audit", "repair"}
+        )
+        for role, chain in GEMINI_ROLE_MODEL_CHAINS.items():
+            with self.subTest(role=role):
+                self.assertTrue(chain)
+                self.assertEqual(len(chain), len(set(chain)))
 
     def test_model_not_found_is_classified_for_immediate_failover(self):
         self.assertTrue(_is_gemini_model_not_found(

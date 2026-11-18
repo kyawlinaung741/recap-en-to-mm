@@ -187,9 +187,26 @@ Tool ဖွင့်ပြီး START နှိပ်လိုက်ရင် `
 | `translation_batch_max_items` | `40` | Gemini တစ်ခါမေးရင် ပါမယ့် စာပိုင်းအရေအတွက် |
 | `atomic_target_duration`, `atomic_max_duration` | `4.2`, `5.6` | စာပိုင်းတစ်ပိုင်းရဲ့ အရှည် (စက္ကန့်) |
 | `translation_audit` | `true` | ပြန်ပြီးတိုင်း စစ်ဆေးတဲ့ အဆင့် |
+| `gemini_text_model` | `gemini-4-hydrogen` | Translation role ရဲ့ primary model |
+| `gemini_role_models` | (အလိုလို role chains) | `context`, `translation`, `audit`, `repair` အလိုက် model fallback chain သတ်မှတ်ရန် |
 | `title_font_path` | `C:\Windows\Fonts\mmrtext.ttf` | Title / Extra text ဖောင့် |
 | `overlay_blur_strength` | `18` | Blur box ရဲ့ ဝါးအား |
 | `whisper_model_other` | `medium` | English မဟုတ်တဲ့ ဘာသာအတွက် Whisper model (NVIDIA GPU မရှိတဲ့ စက်မှာ `small` က ပိုမြန်တယ်) |
+
+`gemini_role_models` ကို လိုမှသာ `config.json` ထဲမှာ ထည့်ပါ။ List သို့မဟုတ် comma-separated string နှစ်မျိုးလုံး ရပါတယ်:
+
+```json
+{
+  "gemini_role_models": {
+    "context": ["gemini-3.8-flash", "gemini-3.5-flash-lite"],
+    "translation": ["gemini-4-hydrogen", "gemini-3.8-flash"],
+    "audit": ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
+    "repair": ["gemini-4-hydrogen", "gemini-3.8-flash"]
+  }
+}
+```
+
+Context က ဇာတ်လမ်း memory၊ translation က အဓိက ဘာသာပြန်၊ audit က sentence-lock စစ်ဆေးမှု၊ repair က audit retry/ပြင်ဆင်မှုအတွက် သီးခြား chain သုံးပါတယ်။ Role တစ်ခုအတွင်းမှာတော့ Gemini key 1 → key 2 → key 3 ပြီးမှ နောက် model ကို အလိုအလျောက် ပြောင်းသွားပါတယ်။
 
 ## စာကြောင်း ခွဲပုံ
 

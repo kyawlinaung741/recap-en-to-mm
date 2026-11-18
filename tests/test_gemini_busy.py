@@ -59,6 +59,28 @@ def setup(ai, keys=("a", "b"), chain=("m1", "m2", "m3")):
 
 
 class BusyModelTests(unittest.TestCase):
+    def test_role_switch_selects_role_specific_chain(self):
+        ai = FakeAI(busy_answers=0)
+        rp._configure_gemini_key_pool(
+            ai,
+            [("KEY_1", "key-1")],
+            client_factory=lambda api_key, http_options: ai.client,
+            log=lambda _m: None,
+            role_model_chains={
+                "translation": ["translation-model"],
+                "context": ["context-model"],
+                "audit": ["audit-model"],
+                "repair": ["repair-model"],
+            },
+        )
+        self.assertEqual(rp._gemini_json(ai, "p", role="context"), {"ok": True})
+        self.assertEqual(rp._gemini_json(ai, "p", role="translation"), {"ok": True})
+        self.assertEqual(rp._gemini_json(ai, "p", role="audit"), {"ok": True})
+        self.assertEqual(rp._gemini_json(ai, "p", role="repair"), {"ok": True})
+        self.assertEqual(ai.models_used, [
+            "context-model", "translation-model", "audit-model", "repair-model",
+        ])
+
     def test_every_model_busy_tries_each_key_then_restarts(self):
         ai = FakeAI(busy_answers=4)
         setup(ai)

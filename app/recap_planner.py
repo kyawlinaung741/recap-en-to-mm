@@ -74,6 +74,15 @@ GEMINI_MODEL_FALLBACK_CHAIN = [
     "gemini-3.1-flash-lite",
 ]
 
+# Role-specific chains keep cheap/context work separate from translation quality
+# work. Each role still uses the same ordered key rotation and model failover.
+GEMINI_ROLE_MODEL_CHAINS: dict[str, list[str]] = {
+    "context": ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+    "translation": list(GEMINI_MODEL_FALLBACK_CHAIN),
+    "audit": ["gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
+    "repair": ["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3.5-flash-lite"],
+}
+
 # Google AI Studio Gemini Decisions API model (free no-cost tier available
 # for prototyping; usage limits apply). Call via client.decisions.create(),
 # never via models.generate_content().
@@ -156,6 +165,7 @@ def _configure_gemini_key_pool(
     log: LogFn,
     request_timeout_seconds: int = 120,
     model_chain: list[str] | None = None,
+    role_model_chains: dict[str, list[str]] | None = None,
 ) -> None:
     """Attach ordered model-major/key-minor Gemini fallback state.
 
@@ -168,9 +178,18 @@ def _configure_gemini_key_pool(
     if not key_pool:
         return
 
-    models = [str(x).strip() for x in (model_chain or GEMINI_MODEL_FALLBACK_CHAIN) if str(x).strip()]
-    if not models:
-        models = [str(getattr(ai, "text_model", "gemini-4-hydrogen") or "gemini-4-hydrogen")]
+    default_models = [str(x).strip() for x in (model_chain or GEMINI_MODEL_FALLBACK_CHAIN) if str(x).strip()]
+    if not default_models:
+        default_models = [str(getattr(ai, "text_model", "gemini-4-hydrogen") or "gemini-4-hydrogen")]
+    normalized_roles: dict[str, list[str]] = {}
+    for role, chain in (role_model_chains or {}).items():
+        values = [str(x).strip() for x in (chain or []) if str(x).strip()]
+        if values:
+            normalized_roles[str(role).strip().lower()] = list(dict.fromkeys(values))
+    normalized_roles.setdefault("default", default_models)
+    normalized_roles.setdefault("translation", default_models)
+    current_role = "translation"
+    models = list(normalized_roles[current_role])
 
     model_index = 0
     key_index = 0
@@ -238,6 +257,23 @@ def _configure_gemini_key_pool(
     # move the next request tries the first model again.
     busy: dict[str, Any] = {"rounds": 0, "left_first_at": None, "first_key": 0}
 
+    def select_role(role: str = "translation") -> None:
+        nonlocal current_role, models, model_index, key_index, busy
+        wanted = str(role or "translation").strip().lower()
+        if wanted not in normalized_roles:
+            wanted = "translation" if "translation" in normalized_roles else "default"
+        if wanted == current_role:
+            return
+        current_role = wanted
+        models = list(normalized_roles[wanted])
+        model_index = 0
+        key_index = 0
+        busy = {"rounds": 0, "left_first_at": None, "first_key": 0}
+        activate(0, 0, reason=f"role={wanted}")
+        ai._recap_active_role = wanted
+        ai._recap_model_pool_size = len(models)
+        ai._recap_model_chain = list(models)
+
     def advance_on_busy(reason: str = "503/high-demand/timeout") -> bool:
         if model_index == 0:
             busy["left_first_at"], busy["first_key"] = time.time(), key_index
@@ -261,6 +297,8 @@ def _configure_gemini_key_pool(
             activate(0, busy["first_key"], reason=f"{models[0]} may be free again")
 
     ai._recap_back_to_first_model = back_to_first_model
+    ai._recap_select_model_role = select_role
+    ai._recap_active_role = current_role
 
     ai._recap_active_key_label = key_pool[0][0]
     ai._recap_active_model = models[0]
@@ -1124,6 +1162,7 @@ def _gemini_json(
     retries: int = 3,
     log: LogFn | None = None,
     response_schema: dict[str, Any] | None = None,
+    role: str = "translation",
 ) -> Any:
     """Run one logical Gemini request with model/key failover.
 
@@ -1132,6 +1171,9 @@ def _gemini_json(
     """
     last: Exception | None = None
     attempt = 1
+    select_role = getattr(ai, "_recap_select_model_role", None)
+    if callable(select_role):
+        select_role(role)
     back = getattr(ai, "_recap_back_to_first_model", None)
     if callable(back):
         back()
@@ -1304,7 +1346,9 @@ SOURCE CHUNK {i}/{len(batches)}:
 {_source_lines(batch)}
 """
         try:
-            data = _gemini_json(ai, prompt, log=log, response_schema=_STORY_CONTEXT_RESPONSE_SCHEMA)
+            data = _gemini_json(
+                ai, prompt, log=log, response_schema=_STORY_CONTEXT_RESPONSE_SCHEMA, role="context"
+            )
             if not isinstance(data, dict):
                 raise RuntimeError("Story context response must be a JSON object")
         except (GeminiKeyPoolExhaustedError, InterruptedError):
@@ -1455,7 +1499,7 @@ CRITICAL OUTPUT ID PROTOCOL:
     for attempt in range(1, 4):
         try:
             payload = _gemini_json(
-                ai, prompt, retries=1, log=log, response_schema=_TRANSLATION_RESPONSE_SCHEMA
+                ai, prompt, retries=1, log=log, response_schema=_TRANSLATION_RESPONSE_SCHEMA, role="translation"
             )
             translated = _validate_translation_items(current, payload, log=log)
             _assert_no_adjacent_translation_duplicates(translated, previous_context)
@@ -1629,7 +1673,8 @@ The audit check IDs MUST equal exactly: {exact_ids_json}
         for attempt in range(1, 3):
             try:
                 payload = _gemini_json(
-                    ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA
+                    ai, prompt, retries=2, log=log, response_schema=_AUDIT_RESPONSE_SCHEMA,
+                    role="audit" if attempt == 1 else "repair",
                 )
                 checks = payload.get("checks") if isinstance(payload, dict) else None
                 if not isinstance(checks, list):
@@ -1794,6 +1839,7 @@ class RecapPlanBuilder:
         atomic_target_duration: float = 4.2,
         gemini_request_timeout_seconds: int = 120,
         gemini_text_model: str = "gemini-4-hydrogen",
+        gemini_role_models: dict[str, Any] | None = None,
         source_language: str = "auto",
         whisper_model_other: str = WHISPER_MODEL_OTHER,
     ):
@@ -1818,6 +1864,21 @@ class RecapPlanBuilder:
         self.atomic_target_duration = max(2.5, min(float(atomic_target_duration), self.atomic_max_duration))
         self.gemini_request_timeout_seconds = max(30, min(int(gemini_request_timeout_seconds), 600))
         self.gemini_text_model = _clean(gemini_text_model) or "gemini-4-hydrogen"
+        configured_roles = gemini_role_models if isinstance(gemini_role_models, dict) else {}
+        self.gemini_role_models: dict[str, list[str]] = {}
+        for role, defaults in GEMINI_ROLE_MODEL_CHAINS.items():
+            raw = configured_roles.get(role, defaults)
+            if isinstance(raw, str):
+                values = [part.strip() for part in raw.split(",") if part.strip()]
+            elif isinstance(raw, (list, tuple)):
+                values = [str(part).strip() for part in raw if str(part).strip()]
+            else:
+                values = list(defaults)
+            self.gemini_role_models[role] = list(dict.fromkeys(values or defaults))
+        if "translation" not in configured_roles:
+            self.gemini_role_models["translation"] = list(dict.fromkeys(
+                [self.gemini_text_model] + self.gemini_role_models["translation"]
+            ))
 
     def _validate_runtime(self) -> None:
         required = [
@@ -2088,6 +2149,7 @@ class RecapPlanBuilder:
                 client_factory=ai_mod.genai.Client,
                 log=self.log,
                 request_timeout_seconds=self.gemini_request_timeout_seconds,
+                role_model_chains=self.gemini_role_models,
             )
 
             self.progress(1, 4, "Story context memory")

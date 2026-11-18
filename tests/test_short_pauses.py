@@ -123,6 +123,14 @@ class ShortPausesPipelineTests(unittest.TestCase):
             runner.short_pauses = short_pauses
             with mock.patch.object(core, "EdgeTTSEngine", FakeEdgeEngine), \
                  mock.patch.object(core, "probe_duration", side_effect=probe), \
+                 mock.patch.object(
+                     core,
+                     "probe_stream_durations",
+                     side_effect=lambda *_args, **_kwargs: {
+                         "video": sum(render_targets),
+                         "audio": sum(render_targets),
+                     },
+                 ), \
                  mock.patch.object(core, "concat_audio", side_effect=lambda _f, _p, out, _w: Path(out).write_bytes(b"a" * 2000)), \
                  mock.patch.object(core, "ffmpeg_encoders", return_value={"libx264"}), \
                  mock.patch.object(core, "render_video_part", side_effect=fake_render), \

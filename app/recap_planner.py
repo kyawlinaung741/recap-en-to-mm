@@ -170,8 +170,6 @@ def _configure_gemini_key_pool(
         model = models[model_index]
         ai.client = build_client(key)
         ai.text_model = model
-        os.environ["GEMINI_API_KEY"] = key
-        os.environ["GEMINI_TEXT_MODEL"] = model
         ai.api_key = key
         ai._recap_active_key_label = label
         ai._recap_active_model = model
@@ -1147,10 +1145,10 @@ def _gemini_json(
                     except Exception as model_exc:
                         raise RuntimeError(f"Gemini model switch failed: {model_exc}") from model_exc
 
-                pool_size = int(getattr(ai, "_recap_key_pool_size", 1) or 1)
-                model_count = int(getattr(ai, "_recap_model_pool_size", 1) or 1)
                 if log:
                     log(f"⛔ Gemini fallback exhausted at {active_model}; no model/key remains.")
+                pool_size = int(getattr(ai, "_recap_key_pool_size", 1) or 1)
+                model_count = int(getattr(ai, "_recap_model_pool_size", 1) or 1)
                 raise GeminiKeyPoolExhaustedError(_gemini_key_pool_message(pool_size, model_count)) from exc
 
             if _is_gemini_transient_model_error(exc):
@@ -1178,6 +1176,8 @@ def _gemini_json(
                         raise RuntimeError(f"Gemini model switch failed: {model_exc}") from model_exc
                 if log:
                     log(f"⛔ Final Gemini model failed with service/timeout error: {exc}")
+                pool_size = int(getattr(ai, "_recap_key_pool_size", 1) or 1)
+                model_count = int(getattr(ai, "_recap_model_pool_size", 1) or 1)
                 raise GeminiKeyPoolExhaustedError(_gemini_key_pool_message(pool_size, model_count)) from exc
 
             if log:
@@ -1938,8 +1938,6 @@ class RecapPlanBuilder:
                 "Gemini API key မတွေ့ပါ။ .env ထဲမှာ GEMINI_API_KEY=... "
                 "(သို့) GEMINI_IMAGE_PROJECT_1_KEY, GEMINI_IMAGE_PROJECT_2_KEY ... ထည့်ပေးပါ။"
             )
-        os.environ["GEMINI_API_KEY"] = key_pool[0][1]
-        os.environ["GEMINI_TEXT_MODEL"] = self.gemini_text_model
         self.log(f"🔑 Gemini key pool ready — {len(key_pool)} key(s) | translation only ({language_name} source uses local Whisper {whisper_model})")
 
         transcript = None
@@ -2032,7 +2030,10 @@ class RecapPlanBuilder:
             raise InterruptedError("STOP requested after timestamp transcription")
 
         with _pushd(self.runtime_root):
-            ai = ai_mod.AIService()
+            ai = ai_mod.AIService(
+                api_key=key_pool[0][1],
+                text_model=self.gemini_text_model,
+            )
             self.log(f"🤖 Gemini primary text model: {ai.text_model}")
             _configure_gemini_key_pool(
                 ai,

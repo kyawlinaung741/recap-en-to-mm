@@ -1220,6 +1220,7 @@ def apply_production_overlays(
                         elif now - last_logged_at >= 10:
                             log(f"🎨 Overlay still running | elapsed={elapsed:.0f}s | processed={last_out_seconds:.1f}s | encoder={run_encoder}")
                             last_logged_at = now
+                proc.stdout.close()
             return_code = proc.wait()
             err_file.seek(0)
             stderr_text = err_file.read()

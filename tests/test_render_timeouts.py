@@ -85,7 +85,7 @@ class RenderTimeoutTests(unittest.TestCase):
                 raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
 
             with mock.patch.object(core.subprocess, "run", side_effect=fake_run):
-                with self.assertRaisesRegex(TimeoutError, "h264_qsv.*timed out"):
+                with self.assertRaisesRegex(TimeoutError, "timed out.*h264_qsv"):
                     core.render_video_part(
                         "ffmpeg", Path(td) / "source.mp4", output,
                         {"video_start": 0.0, "video_end": 1.0},

@@ -22,6 +22,7 @@ class WhisperTimestampService:
     Local Whisper timestamp engine.
 
     Preferred backend: faster-whisper (fast, low VRAM, accurate segment/word timestamps)
+    Optional Chinese backend: FunASR Paraformer-zh with VAD/punctuation
     Fallback backend: openai-whisper
 
     Gemini never invents timestamps in V4. This service is the local timing source of truth.
@@ -42,6 +43,39 @@ class WhisperTimestampService:
         self.language = language or os.getenv("WHISPER_LANGUAGE") or None
         self._model: Any = None
         self._active_backend: Optional[str] = None
+
+    def _load_paraformer(self) -> bool:
+        """Load FunASR's Chinese-only Paraformer pipeline on demand."""
+        try:
+            from funasr import AutoModel
+        except Exception as exc:
+            print(f"⚠️ FunASR is not installed; Paraformer-zh cannot start: {exc}")
+            return False
+        try:
+            print("🧠 Loading Paraformer-zh: ASR + FSMN-VAD + CT-Punc", flush=True)
+            kwargs = {
+                "model": "paraformer-zh",
+                "hub": "ms",
+                "vad_model": "fsmn-vad",
+                "punc_model": "ct-punc",
+                "device": self.device,
+            }
+            self._model = AutoModel(**kwargs)
+            self._active_backend = "paraformer-zh"
+            return True
+        except Exception as exc:
+            print(f"⚠️ Paraformer-zh {self.device} load failed: {exc}")
+            if self.device != "cpu":
+                try:
+                    print("↩️ Trying Paraformer-zh on CPU", flush=True)
+                    kwargs["device"] = "cpu"
+                    self._model = AutoModel(**kwargs)
+                    self._active_backend = "paraformer-zh"
+                    self.device = "cpu"
+                    return True
+                except Exception as cpu_exc:
+                    print(f"⚠️ Paraformer-zh CPU load failed: {cpu_exc}")
+            return False
 
     def _download_model_once(self) -> None:
         """First run on a PC: the model (~460 MB for small.en, ~1.5 GB for medium) comes from huggingface.co.
@@ -192,19 +226,23 @@ class WhisperTimestampService:
             return
 
         backends = []
+        if self.backend in {"paraformer", "paraformer-zh", "funasr"}:
+            backends.append("paraformer")
         if self.backend in {"auto", "faster", "faster-whisper"}:
             backends.append("faster")
         if self.backend in {"auto", "openai", "openai-whisper", "whisper"}:
             backends.append("openai")
 
         for backend in backends:
+            if backend == "paraformer" and self._load_paraformer():
+                return
             if backend == "faster" and self._load_faster_whisper():
                 return
             if backend == "openai" and self._load_openai_whisper():
                 return
 
         raise RuntimeError(
-            "Local Whisper backend မတွေ့ပါ။ faster-whisper သို့မဟုတ် openai-whisper "
+            "Local ASR backend မတွေ့ပါ။ Paraformer-zh, faster-whisper သို့မဟုတ် openai-whisper "
             "install/config ကိုစစ်ပါ။"
         )
 
@@ -395,6 +433,51 @@ class WhisperTimestampService:
         print(f"✅ Long-audio chunks combined: {len(all_segments)} segments", flush=True)
         return result
 
+    @staticmethod
+    def _paraformer_seconds(value: Any) -> float:
+        """FunASR sentence_info timestamps are milliseconds; tolerate seconds too."""
+        try:
+            number = float(value or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+        return number / 1000.0 if number > 100.0 else number
+
+    def _transcribe_paraformer(self, media_path: str, media_duration: Optional[float] = None) -> dict[str, Any]:
+        batch_size_s = max(30, int(os.getenv("PARAFORMER_BATCH_SIZE_S", "300")))
+        raw_result = self._model.generate(input=media_path, batch_size_s=batch_size_s)
+        raw = raw_result[0] if isinstance(raw_result, list) and raw_result else raw_result
+        raw = raw if isinstance(raw, dict) else {}
+        segments: list[dict[str, Any]] = []
+        for item in raw.get("sentence_info") or raw.get("sentences") or []:
+            if not isinstance(item, dict):
+                continue
+            text = self._clean_text(item.get("text") or item.get("sentence") or "")
+            start = self._paraformer_seconds(item.get("start"))
+            end = self._paraformer_seconds(item.get("end"))
+            if text and end > start:
+                segments.append({
+                    "id": len(segments),
+                    "start": round(start, 3),
+                    "end": round(end, 3),
+                    "text": text,
+                    "words": [],
+                })
+        if not segments:
+            text = self._clean_text(raw.get("text") or "")
+            if text:
+                end = float(media_duration or 0.0)
+                if end <= 0:
+                    end = 1.0
+                segments.append({"id": 0, "start": 0.0, "end": round(end, 3), "text": text, "words": []})
+        return {
+            "backend": "paraformer-zh",
+            "model": "paraformer-zh",
+            "language": "zh",
+            "language_probability": 1.0,
+            "segments": segments,
+            "word_count": sum(len(str(seg["text"]).split()) for seg in segments),
+        }
+
     def _transcribe_openai(self, media_path: str) -> dict[str, Any]:
         kwargs: dict[str, Any] = {
             "verbose": False,
@@ -565,7 +648,9 @@ class WhisperTimestampService:
         self._ensure_model()
         print(f"🎙️ Local Whisper timestamp transcription: {path.name}")
 
-        if self._active_backend == "faster-whisper":
+        if self._active_backend == "paraformer-zh":
+            result = self._transcribe_paraformer(str(path), media_duration=media_duration)
+        elif self._active_backend == "faster-whisper":
             try:
                 result = self._transcribe_faster_chunked(str(path), vad_filter=True, media_duration=media_duration)
             except RuntimeError as exc:

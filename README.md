@@ -192,7 +192,9 @@ Tool ဖွင့်ပြီး START နှိပ်လိုက်ရင် `
 | `gemini_role_models` | (အလိုလို role chains) | `context`, `translation`, `audit`, `repair` အလိုက် model fallback chain သတ်မှတ်ရန် |
 | `title_font_path` | `C:\Windows\Fonts\mmrtext.ttf` | Title / Extra text ဖောင့် |
 | `overlay_blur_strength` | `18` | Blur box ရဲ့ ဝါးအား |
-| `whisper_model_other` | `medium` | English မဟုတ်တဲ့ ဘာသာအတွက် Whisper model (NVIDIA GPU မရှိတဲ့ စက်မှာ `small` က ပိုမြန်တယ်) |
+| `whisper_model_other` | `medium` | Chinese မဟုတ်တဲ့ English အပြင် အခြားဘာသာတွေအတွက် Whisper model (NVIDIA GPU မရှိတဲ့ စက်မှာ `small` က ပိုမြန်တယ်) |
+
+Source language မှာ **Chinese** ကို ရွေးထားတဲ့အခါပဲ Paraformer-zh ကို အသုံးပြုပါတယ်။ English, Hindi, Korean စတဲ့ ရွေးချယ်မှုတွေ၊ Auto-detect ကနေ Chinese မဟုတ်တဲ့ ဘာသာတွေကို တွေ့တဲ့အခါတော့ လက်ရှိ Whisper လမ်းကြောင်းအတိုင်းပဲ ဆက်သွားပါတယ်။ `INSTALL_REQUIREMENTS.bat` က FunASR နဲ့ ModelScope package တွေကို တစ်ခါတည်း install လုပ်ပေးပြီး Paraformer model/VAD/punctuation model တွေက Chinese job ပထမဆုံး run ချိန်မှာ download ဖြစ်ပါမယ်။
 
 `gemini_role_models` ကို လိုမှသာ `config.json` ထဲမှာ ထည့်ပါ။ List သို့မဟုတ် comma-separated string နှစ်မျိုးလုံး ရပါတယ်:
 

@@ -37,9 +37,10 @@ BOUNDARY_PROFILE = "v2_full_coverage_midpoint"
 WHISPER_MODEL = "small.en"
 WHISPER_LANGUAGE = "en"
 # Any source language (2026-10-17, user: "don't fix Whisper to English"): an English video keeps small.en (and
-# its old jobs keep their transcript and translation); any other language is heard by the multilingual medium
-# model (WHISPER_MODEL_OTHER; config.json "whisper_model_other": "small" is faster on a PC without an NVIDIA
-# GPU), and "Auto-detect" first asks the small multilingual base model which language the video speaks.
+# its old jobs keep their transcript and translation); an explicitly selected Chinese video uses Paraformer-zh;
+# every other language is heard by the multilingual medium model (WHISPER_MODEL_OTHER; config.json
+# "whisper_model_other": "small" is faster on a PC without an NVIDIA GPU), and "Auto-detect" first asks the
+# small multilingual base model which language the video speaks.
 WHISPER_MODEL_OTHER = "medium"
 WHISPER_DETECT_MODEL = "base"
 SOURCE_LANGUAGES = {
@@ -55,8 +56,10 @@ def source_language_name(code: str) -> str:
 
 
 def whisper_choice(language: str, other_model: str = WHISPER_MODEL_OTHER) -> tuple[str, str]:
-    """(Whisper model, language code) for a known source language."""
+    """(local ASR model, language code) for a known source language."""
     code = str(language or "en").strip().lower()
+    if code == "zh":
+        return "paraformer-zh", code
     return (WHISPER_MODEL, WHISPER_LANGUAGE) if code == "en" else (str(other_model or WHISPER_MODEL_OTHER), code)
 
 
@@ -2055,7 +2058,7 @@ class RecapPlanBuilder:
                 if state.get("source_fingerprint") == fp and state.get("transcript_ready") is True:
                     candidate = json.loads(transcript_file.read_text(encoding="utf-8"))
                     if (
-                        candidate.get("backend") in {"faster-whisper", "openai-whisper"}
+                        candidate.get("backend") in {"paraformer-zh", "faster-whisper", "openai-whisper"}
                         and candidate.get("model") == whisper_model
                         and str(candidate.get("language") or "").lower().startswith(whisper_language.lower())
                     ):
@@ -2073,9 +2076,15 @@ class RecapPlanBuilder:
             self.log(f"🌐 {language_name} → Myanmar | Local Whisper language={whisper_language} | model={whisper_model}")
             self.progress(0, 4, "Whisper timestamp transcript")
             self.log("🎙️ [1/4] Local Whisper — full video timestamp transcript...")
+            configured_backend = str(runtime_cfg.get("whisper_backend", os.getenv("WHISPER_BACKEND", "auto")))
+            selected_backend = "paraformer-zh" if whisper_language == "zh" and whisper_model == "paraformer-zh" else configured_backend
+            # The source-language choice is authoritative: a Paraformer setting must never affect
+            # English, Hindi, or any other language selected in the existing UI.
+            if whisper_language != "zh" and selected_backend in {"paraformer", "paraformer-zh", "funasr"}:
+                selected_backend = "auto"
             whisper = whisper_mod.WhisperTimestampService(
                 model_size=whisper_model,
-                backend=str(runtime_cfg.get("whisper_backend", os.getenv("WHISPER_BACKEND", "auto"))),
+                backend=selected_backend,
                 device=str(runtime_cfg.get("whisper_device", os.getenv("WHISPER_DEVICE", "cuda"))),
                 compute_type=str(runtime_cfg.get("whisper_compute_type", os.getenv("WHISPER_COMPUTE_TYPE", "float16"))),
                 language=whisper_language,

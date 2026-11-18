@@ -1,0 +1,3 @@
+# Chinese-only ASR path. The app selects this model only when source_language is zh.
+funasr>=1.2.7,<2
+modelscope>=1.28.0

@@ -32,7 +32,7 @@ class SourceLanguageTests(unittest.TestCase):
     def test_english_keeps_small_en_others_use_the_multilingual_model(self):
         self.assertEqual(rp.whisper_choice("en"), ("small.en", "en"))
         self.assertEqual(rp.whisper_choice("hi"), ("medium", "hi"))
-        self.assertEqual(rp.whisper_choice("zh", "small"), ("small", "zh"))
+        self.assertEqual(rp.whisper_choice("zh", "small"), ("paraformer-zh", "zh"))
         self.assertEqual(rp.source_language_name("ko"), "Korean")
 
     def test_a_chosen_language_is_used_without_detection(self):
@@ -44,7 +44,7 @@ class SourceLanguageTests(unittest.TestCase):
     def test_auto_detect(self):
         with mock.patch.object(rp.RecapPlanBuilder, "_detect_language", return_value="zh") as detect:
             got = _builder("auto")._pick_whisper(self.src, self.tmp, self.tmp / "whisper_transcript.json", True)
-        self.assertEqual(got, ("medium", "zh"))
+        self.assertEqual(got, ("paraformer-zh", "zh"))
         detect.assert_called_once()
 
     def test_an_old_english_job_keeps_its_transcript(self):

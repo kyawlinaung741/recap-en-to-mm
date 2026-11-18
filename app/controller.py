@@ -26,6 +26,7 @@ from recap_planner import SOURCE_LANGUAGES
 from recap_subtitles import SubtitleControls
 from subtitle_png import geometry as subtitle_geometry, sample as subtitle_sample
 from recap_runtime.services.structured_logger import append_error, error_log_path
+from recap_runtime.services.job_store import JobStore
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT_DIR / "config.json"
@@ -1356,7 +1357,7 @@ class App(tk.Tk):
         job_dir = self.current_job
         if not job_dir:
             return
-        append_error(
+        record = append_error(
             error_log_path(job_dir),
             job_id=job_dir.name,
             stage=stage,
@@ -1364,6 +1365,12 @@ class App(tk.Tk):
             details=details,
             retryable=retryable,
         )
+        store = getattr(self, "_job_store", None)
+        if store is not None:
+            try:
+                store.record_error(record)
+            except Exception:
+                pass
 
     def _run_child(self, script_name: str, cfg_path: Path, stage_name: str) -> dict:
         self.msgq.put(("stage", stage_name))
@@ -1487,10 +1494,14 @@ class App(tk.Tk):
                     self.msgq.put(("done", f"ပြီးပါပြီ။\n\nOutput:\n{final}\n\nJob folder:\n{job_dir}"))
                 except InterruptedError as exc:
                     self._log(str(exc))
+                    if self._job_store is not None:
+                        self._job_store.set_status(self.current_job.name, "stopped")
                     self.msgq.put(("error", str(exc)))
                 except Exception as exc:
                     self._log(traceback.format_exc())
                     self._record_structured_error(stage="job", message=str(exc), retryable=True)
+                    if self._job_store is not None:
+                        self._job_store.set_status(self.current_job.name, "failed")
                     self.msgq.put(("error", str(exc)))
                 return
 
@@ -1523,12 +1534,16 @@ class App(tk.Tk):
                     self._log(f"✅ {label} COMPLETE → {final}")
                 except InterruptedError as exc:
                     self._log(str(exc))
+                    if self._job_store is not None:
+                        self._job_store.set_status(self.current_job.name, "stopped")
                     stopped = True
                     failed.append(f"{source.name} · stopped")
                     break
                 except Exception as exc:
                     self._log(traceback.format_exc())
                     self._record_structured_error(stage="job", message=str(exc), retryable=True)
+                    if self._job_store is not None:
+                        self._job_store.set_status(self.current_job.name, "failed")
                     first_line = (str(exc).splitlines() or [type(exc).__name__])[0]
                     failed.append(f"{source.name} · {first_line[:160]}")
                     self._log(f"❌ {label} FAILED — continuing with next video")
@@ -1560,6 +1575,16 @@ class App(tk.Tk):
             self.run_log_path.write_text("", encoding="utf-8")
         except Exception:
             pass
+        self._job_store = None
+        try:
+            stat = source.stat()
+            fingerprint = f"{stat.st_size}:{stat.st_mtime_ns}"
+            self._job_store = JobStore(job_dir / "job.sqlite")
+            self._job_store.upsert_job(
+                job_dir.name, str(source), source_fingerprint=fingerprint, status="running"
+            )
+        except Exception as exc:
+            self._log(f"⚠️ SQLite job store unavailable; JSON checkpoints remain active: {exc}")
         stop_file = job_dir / ".stop_requested"
         if not self.stop_event.is_set():
             stop_file.unlink(missing_ok=True)
@@ -1597,7 +1622,11 @@ class App(tk.Tk):
         plan_path = str(planner_result.get("plan_path") or (job_dir / "smart_sync_plan.json"))
 
         plan_data = json.loads(Path(plan_path).read_text(encoding="utf-8"))
-        segment_count = len(normalize_segments(plan_data))
+        plan_segments = normalize_segments(plan_data)
+        segment_count = len(plan_segments)
+        if self._job_store is not None:
+            self._job_store.upsert_segments(job_dir.name, plan_segments)
+            self._job_store.set_status(job_dir.name, "planned")
         self._log(f"🧩 Final plan: {segment_count} segments → Edge TTS")
 
         if stop_file.exists():
@@ -1605,6 +1634,8 @@ class App(tk.Tk):
 
         self._log("✅ Transcript/translation complete.")
         self._log(f"🎙️ Narrator TTS — voice={settings['voice']}")
+        if self._job_store is not None:
+            self._job_store.set_status(job_dir.name, "rendering")
         time.sleep(0.2)
 
         render_cfg = job_dir / "_render_worker.json"
@@ -1649,6 +1680,9 @@ class App(tk.Tk):
                 shutil.copy2(srt, srt_target)
                 self._log(f"📝 SRT saved to {srt_target}")
             final = str(target)
+        if self._job_store is not None:
+            self._job_store.upsert_asset(job_dir.name, None, "final", str(final), status="completed")
+            self._job_store.set_status(job_dir.name, "completed")
         return str(final), job_dir
 
     def _stop(self) -> None:

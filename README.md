@@ -77,6 +77,7 @@ Job folder ထဲမှာ ကြည့်လို့ရတဲ့ ဖိုင�
 - `smart_sync_plan.json` — အချိန်ညှိထားတဲ့ plan
 - `run.log` — အလုပ်လုပ်သွားတဲ့ မှတ်တမ်း
 - `errors.jsonl` — error တစ်ခုချင်းစီကို JSON line အဖြစ် သိမ်းထားတဲ့ machine-readable log (stage၊ segment၊ error type၊ retry လုပ်လို့ရ/မရ)
+- `job.sqlite` — job/segment/translation/final asset status ကို ရှာဖွေလို့ရအောင် သိမ်းထားတဲ့ SQLite sidecar; JSON checkpoint တွေကို အစားမထိုးဘဲ အတူတူသုံးပါတယ်
 
 ## Splitter (ဗီဒီယို အပိုင်းခွဲ)
 

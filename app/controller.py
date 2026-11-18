@@ -25,6 +25,7 @@ from gemini_tts import GEMINI_VOICES
 from recap_planner import SOURCE_LANGUAGES
 from recap_subtitles import SubtitleControls
 from subtitle_png import geometry as subtitle_geometry, sample as subtitle_sample
+from recap_runtime.services.structured_logger import append_error, error_log_path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 CONFIG_PATH = ROOT_DIR / "config.json"
@@ -1349,6 +1350,21 @@ class App(tk.Tk):
     def _write_worker_cfg(self, path: Path, data: dict) -> None:
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    def _record_structured_error(self, *, stage: str, message: str, details: dict | None = None,
+                                 retryable: bool | None = None) -> None:
+        """Write machine-readable diagnostics while keeping the human log unchanged."""
+        job_dir = self.current_job
+        if not job_dir:
+            return
+        append_error(
+            error_log_path(job_dir),
+            job_id=job_dir.name,
+            stage=stage,
+            message=message,
+            details=details,
+            retryable=retryable,
+        )
+
     def _run_child(self, script_name: str, cfg_path: Path, stage_name: str) -> dict:
         self.msgq.put(("stage", stage_name))
         self._log(f"\n{'=' * 64}\n{stage_name}\n{'=' * 64}")
@@ -1394,6 +1410,11 @@ class App(tk.Tk):
                         result = event
                     elif kind == "error":
                         reported_error = str(event.get("message", ""))
+                        self._record_structured_error(
+                            stage=stage_name,
+                            message=reported_error,
+                            details={"script": script_name, "config": str(cfg_path)},
+                        )
                     elif kind == "stopped":
                         stopped_message = str(event.get("message", "Stopped"))
                     continue
@@ -1409,6 +1430,12 @@ class App(tk.Tk):
         if code != 0:
             if reported_error:
                 raise RuntimeError(reported_error + f"\n\nChild exit code: {code}\nLog: {self.run_log_path}")
+            self._record_structured_error(
+                stage=stage_name,
+                message=_native_crash_message(code),
+                details={"script": script_name, "exit_code": code, "config": str(cfg_path)},
+                retryable=False,
+            )
             raise RuntimeError(_native_crash_message(code) + f"\n\nLog: {self.run_log_path}")
         return result
 
@@ -1462,6 +1489,7 @@ class App(tk.Tk):
                     self.msgq.put(("error", str(exc)))
                 except Exception as exc:
                     self._log(traceback.format_exc())
+                    self._record_structured_error(stage="job", message=str(exc), retryable=True)
                     self.msgq.put(("error", str(exc)))
                 return
 
@@ -1499,6 +1527,7 @@ class App(tk.Tk):
                     break
                 except Exception as exc:
                     self._log(traceback.format_exc())
+                    self._record_structured_error(stage="job", message=str(exc), retryable=True)
                     first_line = (str(exc).splitlines() or [type(exc).__name__])[0]
                     failed.append(f"{source.name} · {first_line[:160]}")
                     self._log(f"❌ {label} FAILED — continuing with next video")

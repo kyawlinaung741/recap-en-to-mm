@@ -59,6 +59,41 @@ class LongVideoSyncTests(unittest.TestCase):
 
             self.assertEqual(duration, sample_frames / sample_rate)
 
+    def test_duration_audit_accepts_one_frame_and_rejects_cumulative_drift(self):
+        # One 30 fps frame plus one 48 kHz sample is the pre-mux error budget.
+        tolerance = 1.0 / 30.0 + 1.0 / 48000.0
+        diff = core.assert_duration_sync(
+            4 * 60 * 60 + tolerance * 0.9,
+            4 * 60 * 60,
+            tolerance=tolerance,
+            stage="test",
+        )
+        self.assertAlmostEqual(diff, tolerance * 0.9)
+        with self.assertRaisesRegex(RuntimeError, "A/V sync audit FAILED"):
+            core.assert_duration_sync(
+                4 * 60 * 60 + 0.25,
+                4 * 60 * 60,
+                tolerance=tolerance,
+                stage="test",
+            )
+
+    def test_final_mp4_stream_audit_reads_video_and_audio_separately(self):
+        payload = {
+            "streams": [
+                {"codec_type": "video", "duration": "14400.000000"},
+                {"codec_type": "audio", "duration": "14400.010000", "sample_rate": "48000"},
+            ]
+        }
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "final.mp4"
+            path.write_bytes(b"stub")
+            with mock.patch.object(
+                core.subprocess, "run",
+                return_value=SimpleNamespace(returncode=0, stdout=__import__("json").dumps(payload), stderr=""),
+            ):
+                durations = core.probe_stream_durations("ffprobe", path)
+        self.assertEqual(durations, {"video": 14400.0, "audio": 14400.01})
+
     def test_rendered_segments_use_one_cfr_30fps_mp4_clock(self):
         with tempfile.TemporaryDirectory() as td:
             output = Path(td) / "part.mp4"

@@ -6,7 +6,7 @@ APP = Path(__file__).resolve().parents[1] / "app"
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))
 
-from recap_planner import GEMINI_MODEL_FALLBACK_CHAIN, _STORY_CONTEXT_RESPONSE_SCHEMA
+from recap_planner import GEMINI_DECISION_MODEL, GEMINI_MODEL_FALLBACK_CHAIN, _STORY_CONTEXT_RESPONSE_SCHEMA
 
 
 class GeminiSchemaTests(unittest.TestCase):
@@ -20,15 +20,23 @@ class GeminiSchemaTests(unittest.TestCase):
                 self.assertEqual(properties[name]["type"], "ARRAY")
                 self.assertEqual(properties[name]["items"]["type"], "STRING")
 
+    def test_gemini_decision_model_is_separate_from_text_fallback(self):
+        self.assertEqual(GEMINI_DECISION_MODEL, "gemini-decision-1")
+        self.assertNotIn(GEMINI_DECISION_MODEL, GEMINI_MODEL_FALLBACK_CHAIN)
+
     def test_current_gemini_models_are_in_fallback_chain(self):
         self.assertEqual(
             GEMINI_MODEL_FALLBACK_CHAIN,
             [
-                "gemini-4-hydrogen",
                 "gemini-3.8-flash",
+                "gemini-4-hydrogen",
+                "gemini-3.5-flash",
                 "gemini-3.5-flash-lite",
                 "gemini-3.6-flash",
+                "gemini-3.7-flash",
                 "gemini-3.1-flash-lite",
+                "gemini-2.5-pro",
+                "gemini-2.5-flash",
                 "gemini-2.5-flash-lite",
             ],
         )

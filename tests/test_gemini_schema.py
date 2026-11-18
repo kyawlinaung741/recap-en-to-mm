@@ -6,7 +6,10 @@ APP = Path(__file__).resolve().parents[1] / "app"
 if str(APP) not in sys.path:
     sys.path.insert(0, str(APP))
 
-from recap_planner import GEMINI_DECISION_MODEL, GEMINI_MODEL_FALLBACK_CHAIN, _STORY_CONTEXT_RESPONSE_SCHEMA
+from recap_planner import (
+    GEMINI_DECISION_MODEL, GEMINI_MODEL_FALLBACK_CHAIN,
+    _STORY_CONTEXT_RESPONSE_SCHEMA, _is_gemini_model_not_found,
+)
 
 
 class GeminiSchemaTests(unittest.TestCase):
@@ -28,18 +31,26 @@ class GeminiSchemaTests(unittest.TestCase):
         self.assertEqual(
             GEMINI_MODEL_FALLBACK_CHAIN,
             [
-                "gemini-3.8-flash",
                 "gemini-4-hydrogen",
+                "gemini-3.8-flash",
+                "gemini-3.7-flash",
+                "gemini-3.6-flash",
                 "gemini-3.5-flash",
                 "gemini-3.5-flash-lite",
-                "gemini-3.6-flash",
-                "gemini-3.7-flash",
                 "gemini-3.1-flash-lite",
-                "gemini-2.5-pro",
-                "gemini-2.5-flash",
-                "gemini-2.5-flash-lite",
             ],
         )
+
+    def test_model_not_found_is_classified_for_immediate_failover(self):
+        self.assertTrue(_is_gemini_model_not_found(
+            RuntimeError("404 NOT_FOUND: models/gemini-2.5-pro is no longer available to new users")
+        ))
+        self.assertTrue(_is_gemini_model_not_found(
+            RuntimeError("model gemini-retired not found")
+        ))
+        self.assertFalse(_is_gemini_model_not_found(
+            RuntimeError("503 high demand")
+        ))
 
 
 if __name__ == "__main__":

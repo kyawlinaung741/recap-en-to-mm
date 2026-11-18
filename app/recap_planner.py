@@ -65,16 +65,13 @@ def whisper_choice(language: str, other_model: str = WHISPER_MODEL_OTHER) -> tup
 # returns classifications/scores, not generated text, so it cannot be placed
 # in this generate_content() fallback chain.
 GEMINI_MODEL_FALLBACK_CHAIN = [
-    "gemini-3.8-flash",
     "gemini-4-hydrogen",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-3.7-flash",
     "gemini-3.1-flash-lite",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
 ]
 
 # Google AI Studio Gemini Decisions API model (free no-cost tier available
@@ -123,6 +120,22 @@ def _is_gemini_transient_model_error(exc: BaseException) -> bool:
         "timed out",
     )
     return any(marker in text for marker in markers)
+
+
+def _is_gemini_model_not_found(exc: BaseException) -> bool:
+    """A model-specific 404 must skip that model, not retry/split the same request."""
+    text = str(exc).lower()
+    has_not_found_status = bool(re.search(r"\b404\b", text)) or "not_found" in text
+    unavailable = (
+        "model" in text
+        and (
+            "not found" in text
+            or "no longer available" in text
+            or "not available to new users" in text
+            or "does not exist" in text
+        )
+    )
+    return has_not_found_status or unavailable
 
 
 def _gemini_key_pool_message(pool_size: int, model_count: int) -> str:
@@ -1136,6 +1149,23 @@ def _gemini_json(
             last = exc
             active_key = str(getattr(ai, "_recap_active_key_label", "GEMINI_API_KEY"))
             active_model = str(getattr(ai, "_recap_active_model", getattr(ai, "text_model", "Gemini")))
+
+            if _is_gemini_model_not_found(exc):
+                if log:
+                    log(f"⚠️ {active_model} returned 404/model-not-found; skipping this unavailable model.")
+                advance = getattr(ai, "_recap_advance_gemini_model", None)
+                if callable(advance):
+                    try:
+                        if advance("404 model not found; skip unavailable model"):
+                            continue  # resend the exact same prompt on the next model
+                    except Exception as model_exc:
+                        raise RuntimeError(f"Gemini model switch failed after 404: {model_exc}") from model_exc
+                pool_size = int(getattr(ai, "_recap_key_pool_size", 1) or 1)
+                model_count = int(getattr(ai, "_recap_model_pool_size", 1) or 1)
+                raise GeminiKeyPoolExhaustedError(
+                    f"Gemini model unavailable (404): {active_model}. No fallback model remains. "
+                    + _gemini_key_pool_message(pool_size, model_count)
+                ) from exc
 
             if _is_gemini_key_rejection(exc):
                 if log:
